@@ -474,6 +474,52 @@ const unit = (value: number): number => (value >>> 0) / 4294967296;
 const money = (value: number): number => Math.max(0, Math.round(value));
 const clamp = (value: number, low: number, high: number): number =>
   Math.max(low, Math.min(high, value));
+
+export function accrueHeat(currentHeat: number, exposure: number): number {
+  const heat = clamp(Math.round(currentHeat), 0, 100);
+  const pressure = Math.max(0, exposure);
+  const acceleration = 0.5 + 1.5 * (heat / 100) ** 2;
+  return clamp(heat + Math.round(pressure * acceleration), 0, 100);
+}
+
+export interface HeatFactors {
+  transactionValue?: number;
+  gunPurchase?: boolean;
+  failedEscape?: boolean;
+  policeShootout?: boolean;
+  policeKilled?: number;
+}
+
+export function heatAfterExposure(
+  currentHeat: number,
+  factors: HeatFactors,
+): number {
+  const transactionValue = Math.max(0, factors.transactionValue ?? 0);
+  let exposure = clamp(
+    Math.round(Math.log10(1 + transactionValue / 1000) * 4),
+    0,
+    24,
+  );
+  if (factors.gunPurchase) exposure += 4;
+  if (factors.failedEscape) exposure += 14;
+  if (factors.policeShootout) exposure += 12;
+  exposure += Math.max(0, Math.floor(factors.policeKilled ?? 0)) * 18;
+  return accrueHeat(currentHeat, exposure);
+}
+
+export function heatAfterTrade(
+  currentHeat: number,
+  transactionValue: number,
+): number {
+  return heatAfterExposure(currentHeat, { transactionValue });
+}
+
+export function heatAfterLayingLow(currentHeat: number): number {
+  const heat = clamp(Math.round(currentHeat), 0, 100);
+  const reduction = Math.round(4 + (100 - heat) * 0.24);
+  return Math.max(0, heat - reduction);
+}
+
 const borough = (state: GameState, id: BoroughId): BoroughState =>
   state.boroughs[id];
 const product = (id: ProductId) => PRODUCTS[PRODUCT_INDEX[id]];
@@ -899,7 +945,12 @@ function buy(state: GameState, id: ProductId, quantity: number): GameState {
   item.avgCost = (item.quantity * item.avgCost + cost) / (item.quantity + q);
   item.quantity += q;
   return addLog(
-    { ...state, cash: state.cash - cost, inventory },
+    {
+      ...state,
+      cash: state.cash - cost,
+      inventory,
+      heat: heatAfterTrade(state.heat, cost),
+    },
     `Bought ${q} ${productName(id)} for $${cost.toLocaleString()}.`,
   );
 }
@@ -920,7 +971,12 @@ function sell(state: GameState, id: ProductId, quantity: number): GameState {
   inventory[id].quantity -= q;
   if (inventory[id].quantity === 0) inventory[id].avgCost = 0;
   return addLog(
-    { ...state, cash: state.cash + proceeds, inventory },
+    {
+      ...state,
+      cash: state.cash + proceeds,
+      inventory,
+      heat: heatAfterTrade(state.heat, proceeds),
+    },
     `Sold ${q} ${productName(id)} for $${proceeds.toLocaleString()}.`,
   );
 }
@@ -1056,7 +1112,7 @@ function buyGun(state: GameState, gunId?: GunId): GameState {
       cash: state.cash - gun.price,
       guns: state.guns + 1,
       weapons: [...owned, gun.id],
-      heat: clamp(state.heat + 4, 0, 100),
+      heat: heatAfterExposure(state.heat, { gunPurchase: true }),
     },
     `Bought a ${gun.name} for ${cashForLog(gun.price)}. Keep it quiet.`,
   );
@@ -1159,6 +1215,7 @@ function useFence(state: GameState): GameState {
       ...state,
       cash: state.cash + proceeds,
       inventory: emptyInventory(),
+      heat: heatAfterTrade(state.heat, proceeds),
     },
     `The fence bought everything in your coat for ${cashForLog(proceeds)}.`,
   );
@@ -1328,7 +1385,7 @@ function resolveEncounter(
       weapons: remainingWeapons,
       inventory,
       phase: "encounter" as Phase,
-      heat: clamp(state.heat + 14, 0, 100),
+      heat: heatAfterExposure(state.heat, { failedEscape: true }),
       health: Math.max(0, state.health - 18),
     };
     if (next.health <= 0) {
@@ -1365,7 +1422,10 @@ function resolveEncounter(
       phase: (remaining > 0 ? "encounter" : "market") as Phase,
       pendingEncounter:
         remaining > 0 ? { ...encounter, officers: remaining } : undefined,
-      heat: clamp(state.heat + 10, 0, 100),
+      heat: heatAfterExposure(state.heat, {
+        policeShootout: true,
+        policeKilled: 1,
+      }),
     };
     if (remaining === 0)
       return withOutcome(
@@ -1392,7 +1452,7 @@ function resolveEncounter(
     rng,
     inventory,
     phase: "encounter" as Phase,
-    heat: clamp(state.heat + 25, 0, 100),
+    heat: heatAfterExposure(state.heat, { policeShootout: true }),
     health: Math.max(0, state.health - 38),
   };
   if (next.health <= 0) {
@@ -1508,7 +1568,7 @@ function layLow(state: GameState): GameState {
       {
         ...state,
         health: clamp(state.health + 22, 0, 100),
-        heat: Math.max(0, state.heat - 24),
+        heat: heatAfterLayingLow(state.heat),
       },
       "You laid low on Day 30.",
     );
@@ -1516,7 +1576,7 @@ function layLow(state: GameState): GameState {
     applyInterest({
       ...state,
       health: clamp(state.health + 22, 0, 100),
-      heat: Math.max(0, state.heat - 24),
+      heat: heatAfterLayingLow(state.heat),
     }),
     state.current,
     state.day + 1,

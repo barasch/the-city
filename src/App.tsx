@@ -95,6 +95,7 @@ function Instructions({ onClose }: { onClose: () => void }) {
             <h3>Risk</h3>
             <p>
               Cargo, heat, routes, and local enforcement affect police risk.
+              Large trades build heat, and existing heat accelerates the gain.
               Escape or fight through a chase one round at a time. High debt can
               also bring the loan shark's enforcers. Guns survive fights, but
               one can be lost during an escape.
@@ -103,8 +104,9 @@ function Instructions({ onClose }: { onClose: () => void }) {
           <article>
             <h3>Lay low</h3>
             <p>
-              Laying low restores health and reduces heat. Markets have no
-              quantity cap beyond cash, coat space, and the day’s listings.
+              Laying low restores health. Low heat disappears quickly; high heat
+              is stubborn. Markets have no quantity cap beyond cash, coat space,
+              and the day’s listings.
             </p>
           </article>
         </div>

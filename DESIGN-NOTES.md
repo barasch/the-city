@@ -45,6 +45,21 @@ provisional until repeated full-run playtests establish their actual value.
   carried or stored—does not count until it is sold. Day 30 liquidates all
   remaining stock at 72% before calculating the final score.
 
+## Heat
+
+- Every market purchase and sale adds heat according to the logarithm of its
+  dollar value. Larger deals therefore matter substantially without making the
+  difference between $1 million and $2 million mechanically linear.
+- New heat is multiplied by a convex function of existing heat. Small-time
+  activity accumulates slowly; conspicuous dealing makes each further exposure
+  more costly. The composite exposure function has separate inputs for gun
+  purchases, failed escapes, police shootouts, and officers killed. A successful
+  fight round counts as both a shootout and one officer killed, so a multi-round
+  fight compounds rapidly.
+- Lay Low removes more heat when the starting level is low and progressively
+  less when it is high. Heat 35 clears in two days; heat 90 remains above zero
+  after five. Plastic surgery clears it completely in five days for $25,000.
+
 ## Guns
 
 The catalog contains one each of Taurus G3C ($500), SIG Sauer P365 ($650), Glock

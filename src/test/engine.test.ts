@@ -6,6 +6,9 @@ import {
   fenceValue,
   GameState,
   GUN_CATALOG,
+  heatAfterExposure,
+  heatAfterLayingLow,
+  heatAfterTrade,
   inventoryUnits,
   localServiceError,
   MAX_GUNS,
@@ -136,6 +139,40 @@ describe("deterministic game engine", () => {
     const highDebt = { ...initial, debt: 26000 };
     const highDebtNext = travelAndEscape(highDebt, "queens");
     expect(highDebtNext.debt).toBe(Math.ceil(highDebt.debt * 1.11));
+  });
+
+  it("makes trade heat accelerate and high heat decay slowly", () => {
+    const smallTradeAtLowHeat = heatAfterTrade(0, 5_000);
+    const millionDollarTradeAtLowHeat = heatAfterTrade(0, 1_000_000);
+    const millionDollarGainAtHighHeat = heatAfterTrade(70, 1_000_000) - 70;
+
+    expect(smallTradeAtLowHeat).toBeLessThan(millionDollarTradeAtLowHeat);
+    expect(millionDollarTradeAtLowHeat).toBeLessThan(
+      millionDollarGainAtHighHeat,
+    );
+
+    let smallTimeHeat = 35;
+    smallTimeHeat = heatAfterLayingLow(smallTimeHeat);
+    smallTimeHeat = heatAfterLayingLow(smallTimeHeat);
+    expect(smallTimeHeat).toBe(0);
+
+    let bigTimeHeat = 90;
+    for (let day = 0; day < 5; day++)
+      bigTimeHeat = heatAfterLayingLow(bigTimeHeat);
+    expect(bigTimeHeat).toBeGreaterThan(0);
+
+    const shootoutHeat = heatAfterExposure(0, { policeShootout: true });
+    const killedOfficerHeat = heatAfterExposure(0, {
+      policeShootout: true,
+      policeKilled: 1,
+    });
+    const killedOfficerWhileHot =
+      heatAfterExposure(60, {
+        policeShootout: true,
+        policeKilled: 1,
+      }) - 60;
+    expect(killedOfficerHeat).toBeGreaterThan(shootoutHeat);
+    expect(killedOfficerWhileHot).toBeGreaterThan(killedOfficerHeat);
   });
 
   it("makes guns obtainable only in The Bronx and consequential in a police encounter", () => {
