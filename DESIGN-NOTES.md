@@ -19,9 +19,10 @@
 The bank and loan shark are available only in the chosen home borough. Fixed
 local services are:
 
-- Manhattan: $25,000 plastic surgery consumes five days and clears heat.
+- Manhattan: a $25,000 plastic surgeon consumes five days and clears heat.
 - Brooklyn: $1,500 private treatment consumes one day and restores full health.
-- Queens: a one-time $4,000 coat upgrade adds 50 spaces.
+- Queens: the coat factory sells $4,000 upgrades through capacities of 25, 50,
+  100, 150, and 200 spaces. New players begin with the 25-space coat.
 - The Bronx: its gun shop gives access to the six-model catalog.
 - Staten Island: a persistent storage unit can hold or return stock, and a fence
   buys everything currently in the coat for 70% of that day's local prices,
@@ -38,8 +39,8 @@ provisional until repeated full-run playtests establish their actual value.
   shortage can raise it to 2.8–6 times its ordinary price. Shocked products are
   always listed, last two to four days, and are announced in a dialog and the
   field notes.
-- Cocaine and heroin are capped at $100,000 per unit. A 150-space coat can
-  therefore gross $15 million on a perfect premium sale, preserving the classic
+- Cocaine and heroin are capped at $100,000 per unit. A 200-space coat can
+  therefore gross $20 million on a perfect premium sale, preserving the classic
   late-run scale without imposing market-depth limits.
 - Displayed net worth is cash plus bank balance minus debt. Unsold stock—whether
   carried or stored—does not count until it is sold. Day 30 liquidates all
@@ -59,6 +60,13 @@ provisional until repeated full-run playtests establish their actual value.
 - Lay Low removes more heat when the starting level is low and progressively
   less when it is high. Heat 35 clears in two days; heat 90 remains above zero
   after five. Plastic surgery clears it completely in five days for $25,000.
+- Police risk is gated by a convex function of heat. At heat below 10, even the
+  worst route and cargo modifiers leave the per-trip encounter chance below 1%.
+  Route conditions, local enforcement, and cargo value modify the heat signal;
+  they do not create a large independent encounter floor.
+- Patrol size also follows heat. Heat 0–9 permits 1–2 officers and heat 10–19
+  permits 1–3. The range rises in steps until heat 100 permits 5–12 officers, so
+  a large chase reflects accumulated exposure rather than coat contents alone.
 
 ## Guns
 

@@ -146,6 +146,12 @@ export const GUN_CATALOG = [
 export type GunId = (typeof GUN_CATALOG)[number]["id"];
 export type GunDefinition = (typeof GUN_CATALOG)[number];
 export const MAX_GUNS = GUN_CATALOG.length;
+export const COAT_CAPACITIES = [25, 50, 100, 150, 200] as const;
+export const MAX_COAT_CAPACITY = COAT_CAPACITIES.at(-1) ?? 200;
+
+export function nextCoatCapacity(currentCapacity: number): number | undefined {
+  return COAT_CAPACITIES.find((capacity) => capacity > currentCapacity);
+}
 
 export function policeFightSuccessChance(guns: number, health: number): number {
   const gunCount = clamp(Math.floor(guns), 0, MAX_GUNS);
@@ -156,7 +162,7 @@ export function policeFightSuccessChance(guns: number, health: number): number {
 export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
   manhattan: {
     id: "plastic-surgeon",
-    directoryName: "Plastic surgery",
+    directoryName: "Plastic surgeon",
     label: "Visit plastic surgeon",
     title: "A new face",
     description:
@@ -178,10 +184,10 @@ export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
   },
   queens: {
     id: "coat-maker",
-    directoryName: "Coat",
+    directoryName: "Coat factory",
     label: "Buy larger coat",
     title: "A larger coat",
-    description: "A larger coat costs $4,000 and adds 50 spaces.",
+    description: "The coat factory will enlarge your coat for $4,000.",
     confirmLabel: "Buy",
     cost: 4000,
     days: 0,
@@ -905,7 +911,7 @@ export function startGame(
     heat: 0,
     guns: 0,
     weapons: [],
-    capacity: 100,
+    capacity: COAT_CAPACITIES[0],
     inventory: emptyInventory(),
     storage: emptyInventory(),
     boroughs: boroughMap(),
@@ -943,7 +949,7 @@ function buy(state: GameState, id: ProductId, quantity: number): GameState {
   if (!state.market.listed.includes(id))
     return invalid(state, `${productName(id)} is not listed here today`);
   if (totalCargo(state.inventory) + q > state.capacity)
-    return invalid(state, "your bag is full");
+    return invalid(state, "your coat is full");
   const price = state.market.prices[id];
   const cost = q * price;
   if (cost > state.cash) return invalid(state, "you do not have enough cash");
@@ -1150,7 +1156,7 @@ export function localServiceError(
   }
   const offer = LOCAL_SERVICES[state.current];
   if (offer.id !== serviceId) return "That service is not available here.";
-  if (offer.id === "coat-maker" && state.capacity >= 150)
+  if (offer.id === "coat-maker" && state.capacity >= MAX_COAT_CAPACITY)
     return "The coat you have is already the largest one available.";
   if (offer.id === "clinic" && state.health >= 100)
     return "The clinic cannot improve perfect health.";
@@ -1167,15 +1173,18 @@ function useLocalService(state: GameState): GameState {
   const error = localServiceError(state);
   if (error) return invalid(state, error.toLowerCase());
   const offer = LOCAL_SERVICES[state.current];
-  if (offer.id === "coat-maker")
+  if (offer.id === "coat-maker") {
+    const capacity = nextCoatCapacity(state.capacity);
+    if (!capacity) return invalid(state, "your coat cannot be enlarged again");
     return addLog(
       {
         ...state,
         cash: state.cash - offer.cost,
-        capacity: state.capacity + 50,
+        capacity,
       },
-      `Bought a larger coat for ${cashForLog(offer.cost)}. Capacity is now ${state.capacity + 50}.`,
+      `The coat factory enlarged your coat to ${capacity} spaces for ${cashForLog(offer.cost)}.`,
     );
+  }
   if (offer.id === "clinic")
     return presentNotices(
       addLog(
@@ -1248,18 +1257,42 @@ function applyInterest(state: GameState): GameState {
   };
 }
 
+/** Police attention is heat-gated; route and cargo can only modify that signal. */
+export function policeEncounterChance(
+  heat: number,
+  routePressure: number,
+  cargoWorth: number,
+): number {
+  const normalizedHeat = clamp(Math.round(heat), 0, 100) / 100;
+  const heatRisk = 0.002 + 0.798 * normalizedHeat ** 2.2;
+  const cargoPressure = clamp(
+    Math.log10(1 + Math.max(0, cargoWorth) / 10_000) * 0.05,
+    0,
+    0.2,
+  );
+  const context = clamp(0.75 + routePressure + cargoPressure, 0.8, 1.35);
+  return clamp(heatRisk * context, 0, 0.9);
+}
+
+export function policeOfficerRange(heat: number): {
+  min: number;
+  max: number;
+} {
+  const level = clamp(Math.round(heat), 0, 100);
+  return {
+    min: clamp(1 + Math.floor(level / 25), 1, 5),
+    max: clamp(2 + Math.floor(level / 10), 2, 12),
+  };
+}
+
 function encounterChance(state: GameState, destination: BoroughId): number {
   const profile = BOROUGH_PROFILE[destination];
   const localDelta =
     borough(state, destination).condition?.enforcementDelta ?? 0;
-  return clamp(
-    profile.route +
-      borough(state, destination).enforcement +
-      localDelta +
-      state.heat / 180 +
-      cargoValue(state) / 80000,
-    0.04,
-    0.82,
+  return policeEncounterChance(
+    state.heat,
+    profile.route + borough(state, destination).enforcement + localDelta,
+    cargoValue(state),
   );
 }
 
@@ -1283,13 +1316,11 @@ function travel(state: GameState, destination: BoroughId): GameState {
   const chance = encounterChance(arrival, destination);
   const withRng = { ...arrival, rng };
   if (roll < chance) {
-    const maxOfficers = clamp(
-      1 + Math.floor(totalCargo(withRng.inventory) / 10),
-      1,
-      12,
-    );
+    const officerRange = policeOfficerRange(withRng.heat);
     const [officerRoll, encounterRng] = nextRandom(withRng);
-    const officers = 1 + Math.floor(officerRoll * maxOfficers);
+    const officers =
+      officerRange.min +
+      Math.floor(officerRoll * (officerRange.max - officerRange.min + 1));
     return presentNotices(
       addLog(
         {
@@ -1383,6 +1414,7 @@ function resolveEncounter(
       );
     }
     const inventory = cloneInventory(state.inventory);
+    const carriedStock = totalCargo(state.inventory);
     for (const p of PRODUCTS)
       inventory[p.id].quantity = Math.floor(inventory[p.id].quantity * 0.72);
     const next = {
@@ -1408,7 +1440,11 @@ function resolveEncounter(
       next,
       "police",
       "You couldn't lose them.",
-      `You lost some of the bag and took a hit.${
+      `${
+        carriedStock > 0
+          ? "You dropped some of your stock and took a hit."
+          : "You took a hit."
+      }${
         droppedGun ? ` You dropped ${droppedLabel} while running.` : ""
       } ${officers} ${
         officers === 1 ? "officer is" : "officers are"
@@ -1435,7 +1471,7 @@ function resolveEncounter(
         next,
         "police",
         "You broke through.",
-        `The last officer is down. You still have ${state.guns} gun${state.guns === 1 ? "" : "s"}.`,
+        "The last officer is down. The way ahead is clear.",
       );
     return withOutcome(
       next,
@@ -1443,11 +1479,12 @@ function resolveEncounter(
       "You got one.",
       `${remaining} ${
         remaining === 1 ? "officer is" : "officers are"
-      } still chasing you. You still have ${state.guns} gun${state.guns === 1 ? "" : "s"}.`,
+      } still chasing you.`,
       "encounter",
     );
   }
   const inventory = cloneInventory(state.inventory);
+  const carriedStock = totalCargo(state.inventory);
   for (const p of PRODUCTS)
     inventory[p.id].quantity = Math.floor(inventory[p.id].quantity * 0.5);
   const next = {
@@ -1471,7 +1508,7 @@ function resolveEncounter(
     next,
     "police",
     "The patrol won the exchange.",
-    `Half the bag is gone and you are hurt. ${officers} ${
+    `${carriedStock > 0 ? "Half your stock is gone and you are hurt." : "You are hurt."} ${officers} ${
       officers === 1 ? "officer is" : "officers are"
     } still chasing you.`,
     "encounter",

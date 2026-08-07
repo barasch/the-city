@@ -13,6 +13,7 @@ import {
   localServiceError,
   LOCAL_SERVICES,
   MAX_GUNS,
+  nextCoatCapacity,
   type LocalServiceOffer,
   ProductId,
   PRODUCTS,
@@ -94,11 +95,12 @@ function Instructions({ onClose }: { onClose: () => void }) {
           <article>
             <h3>Risk</h3>
             <p>
-              Cargo, heat, routes, and local enforcement affect police risk.
-              Large trades build heat, and existing heat accelerates the gain.
-              Escape or fight through a chase one round at a time. High debt can
-              also bring the loan shark's enforcers. Guns survive fights, but
-              one can be lost during an escape.
+              Heat drives both police risk and patrol size; routes, cargo, and
+              local enforcement modify the odds. Large trades build heat, and
+              existing heat accelerates the gain. Escape or fight through a
+              chase one round at a time. High debt can also bring the loan
+              shark's enforcers. Guns survive fights, but one can be lost during
+              an escape.
             </p>
           </article>
           <article>
@@ -320,8 +322,7 @@ function Market({
     if (type === "sell" && q > held)
       return setError(`You only carry ${held} ${product?.name ?? "units"}.`);
     act({ type, product: productId as ProductId, quantity: q });
-    setQuantity(0);
-    setError("");
+    closeProduct();
   };
   useEffect(() => {
     if (state.phase !== "market") closeProduct();
@@ -485,8 +486,7 @@ function StorageDialog({
   const run = () => {
     if (!mode || !selected || quantityError) return;
     act({ type: mode, product: selected, quantity: normalized });
-    setSelected(null);
-    setQuantity(0);
+    onClose();
   };
   return (
     <Dialog title="Storage unit" eyebrow="STATEN ISLAND" onClose={onClose}>
@@ -549,9 +549,6 @@ function StorageDialog({
           )}
           <div className="dialog-actions">
             <button onClick={back}>Back</button>
-            <button className="text-button" onClick={onClose}>
-              Cancel
-            </button>
           </div>
         </>
       ) : (
@@ -590,9 +587,6 @@ function StorageDialog({
               Max
             </button>
             <button onClick={back}>Back</button>
-            <button className="text-button" onClick={onClose}>
-              Cancel
-            </button>
           </div>
         </>
       )}
@@ -655,8 +649,7 @@ function Services({
     const amountError = serviceAmountError(serviceAction, value, balances);
     if (amountError) return setError(amountError);
     act({ type: serviceAction, amount: value });
-    setAmount(0);
-    setError("");
+    close();
   };
   useEffect(() => {
     if (state.phase !== "market") close();
@@ -799,9 +792,6 @@ function Services({
                 >
                   Back
                 </button>
-                <button className="text-button" onClick={close}>
-                  Cancel
-                </button>
               </div>
             </>
           )}
@@ -826,7 +816,10 @@ function Services({
                   <button
                     className={owned ? "" : "primary"}
                     disabled={owned || full || short}
-                    onClick={() => act({ type: "buy-gun", gun: gun.id })}
+                    onClick={() => {
+                      act({ type: "buy-gun", gun: gun.id });
+                      close();
+                    }}
                   >
                     {owned
                       ? "Owned"
@@ -842,7 +835,7 @@ function Services({
           </div>
           <div className="dialog-actions gun-dialog-actions">
             <button className="text-button" onClick={close}>
-              Done
+              Cancel
             </button>
           </div>
         </Dialog>
@@ -857,7 +850,10 @@ function Services({
           onClose={close}
         >
           <p className="dialog-context">
-            {localService.description}
+            {localService.id === "coat-maker" &&
+            nextCoatCapacity(state.capacity)
+              ? `A ${nextCoatCapacity(state.capacity)}-space coat costs ${cash(localService.cost)}.`
+              : localService.description}
             {localService.id === "fence" &&
               ` Today's offer is ${cash(fenceValue(state))}.`}
           </p>
@@ -1168,7 +1164,7 @@ function Encounter({
     <div className="encounter-backdrop">
       <section className="encounter" role="dialog" aria-modal="true">
         <p className="eyebrow">POLICE ENCOUNTER</p>
-        <h2>They want to search the bag.</h2>
+        <h2>They want to search your coat.</h2>
         <p>
           {officers} {officers === 1 ? "officer is" : "officers are"} chasing
           you. You have {state.guns} gun{state.guns === 1 ? "" : "s"} and{" "}

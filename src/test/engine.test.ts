@@ -3,6 +3,7 @@ import {
   applyAction,
   BOROUGHS,
   boroughServiceNames,
+  COAT_CAPACITIES,
   fenceValue,
   GameState,
   GUN_CATALOG,
@@ -12,7 +13,9 @@ import {
   inventoryUnits,
   localServiceError,
   MAX_GUNS,
+  policeEncounterChance,
   policeFightSuccessChance,
+  policeOfficerRange,
   PRODUCTS,
   startGame,
   storedUnits,
@@ -73,6 +76,7 @@ describe("deterministic game engine", () => {
     let state = {
       ...startGame("Accountant", "brooklyn", 5),
       cash: 100_000_000,
+      capacity: 100,
     };
     const id = state.market.listed[0];
     const firstPrice = state.market.prices[id];
@@ -176,6 +180,40 @@ describe("deterministic game engine", () => {
     expect(killedOfficerWhileHot).toBeGreaterThan(killedOfficerHeat);
   });
 
+  it("uses heat to gate police encounters and patrol size", () => {
+    const worstLowHeatChance = policeEncounterChance(9, 0.52, 100_000_000);
+    expect(worstLowHeatChance).toBeLessThan(0.01);
+    expect(policeEncounterChance(0, 0.52, 100_000_000)).toBeLessThan(
+      worstLowHeatChance,
+    );
+    expect(policeEncounterChance(50, 0.3, 0)).toBeGreaterThan(
+      policeEncounterChance(15, 0.3, 0),
+    );
+    expect(policeEncounterChance(90, 0.3, 0)).toBeGreaterThan(
+      policeEncounterChance(50, 0.3, 0),
+    );
+
+    expect(policeOfficerRange(0)).toEqual({ min: 1, max: 2 });
+    expect(policeOfficerRange(9)).toEqual({ min: 1, max: 2 });
+    expect(policeOfficerRange(15)).toEqual({ min: 1, max: 3 });
+    expect(policeOfficerRange(50)).toEqual({ min: 3, max: 7 });
+    expect(policeOfficerRange(100)).toEqual({ min: 5, max: 12 });
+
+    let foundLowHeatEncounter = false;
+    for (let seed = 1; seed <= 1000; seed++) {
+      const traveled = applyAction(
+        { ...startGame("Small Time", "brooklyn", seed), heat: 15 },
+        { type: "travel", destination: "staten" },
+      );
+      if (traveled.pendingEncounter) {
+        foundLowHeatEncounter = true;
+        expect(traveled.pendingEncounter.officers).toBeGreaterThanOrEqual(1);
+        expect(traveled.pendingEncounter.officers).toBeLessThanOrEqual(3);
+      }
+    }
+    expect(foundLowHeatEncounter).toBe(true);
+  });
+
   it("makes guns obtainable only in The Bronx and consequential in a police encounter", () => {
     const home = { ...startGame("Armed", "brooklyn", 9), cash: 20000 };
     const refusedAtHome = applyAction(home, {
@@ -230,46 +268,46 @@ describe("deterministic game engine", () => {
       applyAction(noGuns, { type: "resolve-encounter", choice: "fight" })
         .log[0],
     ).toContain("no guns");
-    // Find a deterministic one-officer encounter, then verify that fighting
-    // does not consume a gun.
-    let encounter: GameState | undefined;
-    for (let seed = 1; seed < 1000 && !encounter; seed++) {
-      const candidate = applyAction(startGame("Patrol", "brooklyn", seed), {
-        type: "travel",
+    // A successful fight drops the officer count, never the gun count.
+    const encounter: GameState = {
+      ...boughtAgain,
+      guns: MAX_GUNS,
+      weapons: GUN_CATALOG.map((gun) => gun.id),
+      phase: "encounter",
+      pendingEncounter: {
         destination: "staten",
-      });
-      if (candidate.phase === "encounter") encounter = candidate;
+        routeRisk: 0.5,
+        cargoValue: 0,
+        officers: 1,
+      },
+    };
+    let result: GameState | undefined;
+    for (let rng = 1; rng < 1000 && !result; rng++) {
+      const candidate = applyAction(
+        { ...encounter, rng },
+        { type: "resolve-encounter", choice: "fight" },
+      );
+      if (candidate.pendingOutcome?.nextPhase === "market") result = candidate;
     }
-    expect(encounter).toBeDefined();
-    if (encounter) {
-      const armed = {
-        ...encounter,
-        guns: MAX_GUNS,
-        weapons: GUN_CATALOG.map((gun) => gun.id),
-      };
-      let result: GameState | undefined;
-      for (let rng = 1; rng < 1000 && !result; rng++) {
-        const candidate = applyAction(
-          { ...armed, rng },
-          { type: "resolve-encounter", choice: "fight" },
-        );
-        if (candidate.pendingOutcome?.nextPhase === "market")
-          result = candidate;
-      }
-      expect(result).toBeDefined();
-      if (!result) return;
-      expect(result.guns).toBe(MAX_GUNS);
-      expect(result.phase).toBe("outcome");
-      expect(result.pendingOutcome?.kind).toBe("police");
-      expect(applyAction(result, { type: "continue" }).phase).toBe("market");
-    }
+    expect(result).toBeDefined();
+    if (!result) return;
+    expect(result.guns).toBe(MAX_GUNS);
+    expect(result.phase).toBe("outcome");
+    expect(result.pendingOutcome?.kind).toBe("police");
+    expect(result.pendingOutcome?.message).not.toContain("gun");
+    expect(applyAction(result, { type: "continue" }).phase).toBe("market");
   });
 
   it("gives every borough a distinct strategic local service", () => {
-    const queens = startGame("Coat", "queens", 41);
-    const largerCoat = applyAction(queens, { type: "use-local-service" });
-    expect(largerCoat.capacity).toBe(150);
-    expect(largerCoat.cash).toBe(1000);
+    let largerCoat = {
+      ...startGame("Coat", "queens", 41),
+      cash: 20_000,
+    };
+    expect(largerCoat.capacity).toBe(COAT_CAPACITIES[0]);
+    for (const capacity of COAT_CAPACITIES.slice(1)) {
+      largerCoat = applyAction(largerCoat, { type: "use-local-service" });
+      expect(largerCoat.capacity).toBe(capacity);
+    }
     expect(localServiceError(largerCoat)).toContain("already the largest");
 
     const brooklyn: GameState = {
@@ -330,7 +368,7 @@ describe("deterministic game engine", () => {
     expect(boroughServiceNames("queens", "queens")).toEqual([
       "Bank",
       "Loan shark",
-      "Coat",
+      "Coat factory",
     ]);
     expect(boroughServiceNames("bronx", "queens")).toEqual(["Guns"]);
     expect(boroughServiceNames("staten", "queens")).toEqual([
@@ -339,7 +377,7 @@ describe("deterministic game engine", () => {
     ]);
     expect(boroughServiceNames("brooklyn", "queens")).toEqual(["Clinic"]);
     expect(boroughServiceNames("manhattan", "queens")).toEqual([
-      "Plastic surgery",
+      "Plastic surgeon",
     ]);
   });
 
@@ -431,6 +469,7 @@ describe("deterministic game engine", () => {
       title: "You got one.",
       nextPhase: "encounter",
     });
+    expect(firstRound?.pendingOutcome?.message).not.toContain("gun");
     if (!firstRound) return;
     const continued = applyAction(firstRound, { type: "continue" });
     expect(continued.phase).toBe("encounter");
@@ -446,9 +485,55 @@ describe("deterministic game engine", () => {
         finalRound = candidate;
     }
     expect(finalRound?.pendingOutcome?.title).toBe("You broke through.");
+    expect(finalRound?.pendingOutcome?.message).not.toContain("gun");
     expect(
       finalRound && applyAction(finalRound, { type: "continue" }).phase,
     ).toBe("market");
+  });
+
+  it("mentions dropped stock only when a failed escape began with stock", () => {
+    const initial = startGame("Empty Coat", "brooklyn", 1701);
+    const chase: GameState = {
+      ...initial,
+      phase: "encounter",
+      pendingEncounter: {
+        destination: "queens",
+        routeRisk: 0.5,
+        cargoValue: 0,
+        officers: 2,
+      },
+    };
+    let failedRng: number | undefined;
+    let emptyResult: GameState | undefined;
+    for (let index = 1; index < 1000 && !emptyResult; index++) {
+      const rng = distributedRng(index);
+      const candidate = applyAction(
+        { ...chase, rng },
+        { type: "resolve-encounter", choice: "escape" },
+      );
+      if (candidate.pendingOutcome?.title === "You couldn't lose them.") {
+        failedRng = rng;
+        emptyResult = candidate;
+      }
+    }
+    expect(emptyResult?.pendingOutcome?.message).toContain("You took a hit.");
+    expect(emptyResult?.pendingOutcome?.message).not.toContain("stock");
+
+    const product = PRODUCTS[0].id;
+    const stockedResult = applyAction(
+      {
+        ...chase,
+        rng: failedRng as number,
+        inventory: {
+          ...chase.inventory,
+          [product]: { quantity: 10, avgCost: 100 },
+        },
+      },
+      { type: "resolve-encounter", choice: "escape" },
+    );
+    expect(stockedResult.pendingOutcome?.message).toContain(
+      "You dropped some of your stock",
+    );
   });
 
   it("shows the classic fatal result before game over in every police branch", () => {
@@ -711,7 +796,7 @@ describe("deterministic game engine", () => {
     expect(highestRatio).toBeGreaterThan(4);
     expect(premiumLow).toBeLessThan(5000);
     expect(premiumHigh).toBeGreaterThanOrEqual(80000);
-    expect(premiumHigh * 150).toBeGreaterThanOrEqual(12_000_000);
+    expect(premiumHigh * 200).toBeGreaterThanOrEqual(16_000_000);
   });
 
   it("keeps hundreds of complete seeded runs inside core invariants", () => {
