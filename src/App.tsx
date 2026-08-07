@@ -3,6 +3,7 @@ import {
   Action,
   BOROUGHS,
   BoroughId,
+  boroughServiceNames,
   currentBorough,
   fenceValue,
   FENCE_SERVICE,
@@ -85,9 +86,9 @@ function Instructions({ onClose }: { onClose: () => void }) {
           <article>
             <h3>Home</h3>
             <p>
-              The bank and loan shark operate only in your home borough. Your
-              gun contact is at home; The Bronx has another shop. Your opening
-              $5,000 comes with $10,000 debt.
+              The bank and loan shark operate only in your home borough. Guns
+              are sold in The Bronx. Your opening $5,000 comes with $10,000
+              debt.
             </p>
           </article>
           <article>
@@ -679,17 +680,14 @@ function Services({
           <>
             <button onClick={() => open("bank")}>Visit bank</button>
             <button onClick={() => open("loan")}>Visit loan shark</button>
-            <button onClick={() => setGunDialog(true)}>Buy a gun</button>
           </>
         )}
-        {!(isHome && localOffer.id === "arms-dealer") && (
-          <button
-            data-service-id={localOffer.id}
-            onClick={() => openLocalOffer(localOffer)}
-          >
-            {localOffer.label}
-          </button>
-        )}
+        <button
+          data-service-id={localOffer.id}
+          onClick={() => openLocalOffer(localOffer)}
+        >
+          {localOffer.label}
+        </button>
         {state.current === "staten" && (
           <button
             data-service-id={FENCE_SERVICE.id}
@@ -972,14 +970,27 @@ function Travel({
           <div className="destination-list">
             {BOROUGHS.map((b) => {
               const isHere = state.current === b.id;
+              const isHome = state.home === b.id;
               return (
                 <button
                   key={b.id}
                   disabled={isHere || state.day >= 30}
                   onClick={() => travelTo(b.id)}
+                  aria-current={isHere ? "location" : undefined}
                 >
-                  {b.name}
-                  {isHere ? " · here" : ""}
+                  <span className="destination-heading">
+                    <strong>{b.name}</strong>
+                    {(isHome || isHere) && (
+                      <span className="destination-status">
+                        {[isHome ? "Home" : "", isHere ? "Here" : ""]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <small>
+                    {boroughServiceNames(b.id, state.home).join(" · ")}
+                  </small>
                 </button>
               );
             })}

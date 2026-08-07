@@ -127,6 +127,7 @@ export type LocalServiceId =
   | "fence";
 export interface LocalServiceOffer {
   id: LocalServiceId;
+  directoryName: string;
   label: string;
   title: string;
   description: string;
@@ -148,6 +149,7 @@ export const MAX_GUNS = GUN_CATALOG.length;
 export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
   manhattan: {
     id: "plastic-surgeon",
+    directoryName: "Plastic surgery",
     label: "Visit plastic surgeon",
     title: "A new face",
     description:
@@ -157,7 +159,19 @@ export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
     days: 5,
   },
   brooklyn: {
+    id: "clinic",
+    directoryName: "Clinic",
+    label: "Visit clinic",
+    title: "Private treatment",
+    description:
+      "Treatment costs $1,500, takes one day, and restores your health.",
+    confirmLabel: "Get treatment",
+    cost: 1500,
+    days: 1,
+  },
+  queens: {
     id: "coat-maker",
+    directoryName: "Coat",
     label: "Buy larger coat",
     title: "A larger coat",
     description: "A larger coat costs $4,000 and adds 50 spaces.",
@@ -165,17 +179,9 @@ export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
     cost: 4000,
     days: 0,
   },
-  queens: {
-    id: "clinic",
-    label: "Visit clinic",
-    title: "Private treatment",
-    description: "Treatment costs $1,500 and restores your health immediately.",
-    confirmLabel: "Get treatment",
-    cost: 1500,
-    days: 0,
-  },
   bronx: {
     id: "arms-dealer",
+    directoryName: "Guns",
     label: "Visit gun shop",
     title: "Gun shop",
     description: "Six models are available, while you have room to carry one.",
@@ -185,6 +191,7 @@ export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
   },
   staten: {
     id: "storage-unit",
+    directoryName: "Storage",
     label: "Visit storage unit",
     title: "Storage unit",
     description:
@@ -196,6 +203,7 @@ export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
 };
 export const FENCE_SERVICE: LocalServiceOffer = {
   id: "fence",
+  directoryName: "Fence",
   label: "Visit fence",
   title: "No questions asked",
   description:
@@ -204,6 +212,13 @@ export const FENCE_SERVICE: LocalServiceOffer = {
   cost: 0,
   days: 0,
 };
+
+export function boroughServiceNames(id: BoroughId, home: BoroughId): string[] {
+  const names = id === home ? ["Bank", "Loan shark"] : [];
+  names.push(LOCAL_SERVICES[id].directoryName);
+  if (id === "staten") names.push(FENCE_SERVICE.directoryName);
+  return names;
+}
 
 export interface InventoryItem {
   quantity: number;
@@ -1022,11 +1037,8 @@ function buyGun(state: GameState, gunId?: GunId): GameState {
       state,
       "the gear contact is unavailable during an encounter",
     );
-  if (state.current !== state.home && state.current !== "bronx")
-    return invalid(
-      state,
-      "guns are available through your home contact or in The Bronx",
-    );
+  if (state.current !== "bronx")
+    return invalid(state, "guns are available only in The Bronx");
   const owned = weaponIds(state);
   if (state.guns >= MAX_GUNS || owned.length >= MAX_GUNS)
     return invalid(state, `you can carry only ${MAX_GUNS} guns`);
@@ -1102,9 +1114,19 @@ function useLocalService(state: GameState): GameState {
       `Bought a larger coat for ${cashForLog(offer.cost)}. Capacity is now ${state.capacity + 50}.`,
     );
   if (offer.id === "clinic")
-    return addLog(
-      { ...state, cash: state.cash - offer.cost, health: 100 },
-      `The clinic restored your health for ${cashForLog(offer.cost)}.`,
+    return presentNotices(
+      addLog(
+        arrive(
+          applyInterest({
+            ...state,
+            cash: state.cash - offer.cost,
+            health: 100,
+          }),
+          state.current,
+          state.day + offer.days,
+        ),
+        `The clinic restored your health for ${cashForLog(offer.cost)} and took one day.`,
+      ),
     );
   if (offer.id === "arms-dealer")
     return invalid(state, "choose a gun from the shop's catalog");

@@ -1000,7 +1000,33 @@ td:first-child {
   gap: 0.5rem;
 }
 .destination-list button {
+  display: grid;
+  gap: 0.35rem;
   text-align: left;
+}
+.destination-list button:disabled {
+  opacity: 0.72;
+}
+.destination-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.destination-heading strong {
+  color: #edfaff;
+  font-size: 0.78rem;
+}
+.destination-status {
+  color: var(--yellow);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.destination-list small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.4;
 }
 .ledger-notes {
   list-style: none;

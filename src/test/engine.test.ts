@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyAction,
   BOROUGHS,
+  boroughServiceNames,
   fenceValue,
   GameState,
   GUN_CATALOG,
@@ -137,8 +138,15 @@ describe("deterministic game engine", () => {
     expect(highDebtNext.debt).toBe(Math.ceil(highDebt.debt * 1.11));
   });
 
-  it("makes guns obtainable at home and consequential in a police encounter", () => {
-    let state = { ...startGame("Armed", "brooklyn", 9), cash: 20000 };
+  it("makes guns obtainable only in The Bronx and consequential in a police encounter", () => {
+    const home = { ...startGame("Armed", "brooklyn", 9), cash: 20000 };
+    const refusedAtHome = applyAction(home, {
+      type: "buy-gun",
+      gun: GUN_CATALOG[0].id,
+    });
+    expect(refusedAtHome.guns).toBe(0);
+    expect(refusedAtHome.log[0]).toContain("only in The Bronx");
+    let state = { ...home, current: "bronx" as const };
     expect(state.guns).toBe(0);
     const bought = applyAction(state, {
       type: "buy-gun",
@@ -213,21 +221,21 @@ describe("deterministic game engine", () => {
   });
 
   it("gives every borough a distinct strategic local service", () => {
-    const brooklyn = startGame("Coat", "brooklyn", 41);
-    const largerCoat = applyAction(brooklyn, { type: "use-local-service" });
+    const queens = startGame("Coat", "queens", 41);
+    const largerCoat = applyAction(queens, { type: "use-local-service" });
     expect(largerCoat.capacity).toBe(150);
     expect(largerCoat.cash).toBe(1000);
     expect(localServiceError(largerCoat)).toContain("already the largest");
 
-    const queens: GameState = {
+    const brooklyn: GameState = {
       ...startGame("Patient", "brooklyn", 42),
-      current: "queens",
       health: 31,
     };
-    const treated = applyAction(queens, { type: "use-local-service" });
+    const treated = applyAction(brooklyn, { type: "use-local-service" });
     expect(treated.health).toBe(100);
     expect(treated.cash).toBe(3500);
-    expect(treated.day).toBe(1);
+    expect(treated.day).toBe(2);
+    expect(treated.debt).toBe(Math.ceil(brooklyn.debt * 1.06));
 
     const bronx: GameState = {
       ...startGame("Armed", "brooklyn", 43),
@@ -271,6 +279,23 @@ describe("deterministic game engine", () => {
     expect(inventoryUnits(fenced)).toBe(0);
     expect(storedUnits(fenced)).toBe(1);
     expect(localServiceError(fenced, "fence")).toContain("coat is empty");
+  });
+
+  it("lists fixed borough services and adds finance only to the home borough", () => {
+    expect(boroughServiceNames("queens", "queens")).toEqual([
+      "Bank",
+      "Loan shark",
+      "Coat",
+    ]);
+    expect(boroughServiceNames("bronx", "queens")).toEqual(["Guns"]);
+    expect(boroughServiceNames("staten", "queens")).toEqual([
+      "Storage",
+      "Fence",
+    ]);
+    expect(boroughServiceNames("brooklyn", "queens")).toEqual(["Clinic"]);
+    expect(boroughServiceNames("manhattan", "queens")).toEqual([
+      "Plastic surgery",
+    ]);
   });
 
   it("makes plastic surgery expensive, slow, and capable of clearing heat", () => {

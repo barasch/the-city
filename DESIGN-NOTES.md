@@ -16,13 +16,13 @@
 
 ## Borough identity
 
-The bank, loan shark, and gun catalog are available in the chosen home borough.
-The other fixed local services are:
+The bank and loan shark are available only in the chosen home borough. Fixed
+local services are:
 
 - Manhattan: $25,000 plastic surgery consumes five days and clears heat.
-- Brooklyn: a one-time $4,000 coat upgrade adds 50 spaces.
-- Queens: $1,500 private treatment restores full health without using a day.
-- The Bronx: its gun shop gives access to the catalog away from home.
+- Brooklyn: $1,500 private treatment consumes one day and restores full health.
+- Queens: a one-time $4,000 coat upgrade adds 50 spaces.
+- The Bronx: its gun shop gives access to the six-model catalog.
 - Staten Island: a persistent storage unit can hold or return stock, and a fence
   buys everything currently in the coat for 70% of that day's local prices,
   including products absent from the market listing.
