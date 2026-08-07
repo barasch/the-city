@@ -81,7 +81,8 @@ function Instructions({ onClose }: { onClose: () => void }) {
             <h3>Risk</h3>
             <p>
               Cargo, heat, routes, and local enforcement affect police risk.
-              Escape or fight, then acknowledge the outcome before continuing.
+              Escape or fight through a chase one round at a time. High debt can
+              also bring the loan shark's enforcers.
             </p>
           </article>
           <article>
@@ -525,17 +526,36 @@ function Encounter({
       </div>
     );
   }
+  if (state.phase === "loan-shark" && state.pendingLoanSharkEncounter) {
+    return (
+      <div className="encounter-backdrop">
+        <section className="encounter" role="dialog" aria-modal="true">
+          <p className="eyebrow">LOAN SHARK</p>
+          <h2>Someone taps you on the shoulder...</h2>
+          <p>The loan shark's enforcers found you.</p>
+          <div className="encounter-actions">
+            <button
+              className="primary"
+              onClick={() => act({ type: "resolve-loan-shark" })}
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
   if (state.phase !== "encounter") return null;
+  const officers = Math.max(1, state.pendingEncounter?.officers ?? 1);
   return (
     <div className="encounter-backdrop">
       <section className="encounter" role="dialog" aria-modal="true">
         <p className="eyebrow">POLICE ENCOUNTER</p>
         <h2>They want to search the bag.</h2>
         <p>
-          Route risk is{" "}
-          {Math.round((state.pendingEncounter?.routeRisk ?? 0) * 100)}%. You
-          have {state.guns} gun{state.guns === 1 ? "" : "s"} and {state.health}{" "}
-          health.
+          {officers} {officers === 1 ? "officer is" : "officers are"} chasing
+          you. You have {state.guns} gun{state.guns === 1 ? "" : "s"} and{" "}
+          {state.health} health.
         </p>
         <div className="encounter-actions">
           <button
@@ -585,6 +605,8 @@ function Game({
       if (instructionsOpen) return;
       if (state.phase === "outcome" && event.key === "Enter")
         act({ type: "continue" });
+      else if (state.phase === "loan-shark" && event.key === "Enter")
+        act({ type: "resolve-loan-shark" });
       else if (state.phase === "encounter" && event.key.toLowerCase() === "e")
         act({ type: "resolve-encounter", choice: "escape" });
       else if (state.phase === "encounter" && event.key.toLowerCase() === "f")

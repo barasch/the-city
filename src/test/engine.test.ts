@@ -8,16 +8,36 @@ import {
   startGame,
 } from "../game/engine";
 
+const clearEncounter = (state: GameState): GameState => {
+  let next = state;
+  for (let round = 0; round < 50; round++) {
+    if (next.phase === "encounter") {
+      next = applyAction(next, {
+        type: "resolve-encounter",
+        choice: "escape",
+      });
+      continue;
+    }
+    if (next.phase === "loan-shark") {
+      next = applyAction(next, { type: "resolve-loan-shark" });
+      continue;
+    }
+    if (next.phase === "outcome") {
+      next = applyAction(next, { type: "continue" });
+      continue;
+    }
+    return next;
+  }
+  throw new Error("Encounter did not resolve within 50 rounds");
+};
+
 const travelAndEscape = (
   state: GameState,
   destination: GameState["current"],
-): GameState => {
-  let next = applyAction(state, { type: "travel", destination });
-  if (next.phase === "encounter")
-    next = applyAction(next, { type: "resolve-encounter", choice: "escape" });
-  if (next.phase === "outcome") next = applyAction(next, { type: "continue" });
-  return next;
-};
+): GameState =>
+  clearEncounter(applyAction(state, { type: "travel", destination }));
+const distributedRng = (index: number): number =>
+  Math.imul(index, 0x9e3779b9) >>> 0;
 
 describe("deterministic game engine", () => {
   it("replays the same seeded action sequence exactly", () => {
@@ -123,7 +143,8 @@ describe("deterministic game engine", () => {
       applyAction(noGuns, { type: "resolve-encounter", choice: "fight" })
         .log[0],
     ).toContain("no guns");
-    // Find a deterministic encounter, then verify that a successful fight consumes one raw gun.
+    // Find a deterministic one-officer encounter, then verify that a successful
+    // fight consumes one raw gun.
     let encounter: GameState | undefined;
     for (let seed = 1; seed < 1000 && !encounter; seed++) {
       const candidate = applyAction(startGame("Patrol", "brooklyn", seed), {
@@ -135,14 +156,104 @@ describe("deterministic game engine", () => {
     expect(encounter).toBeDefined();
     if (encounter) {
       const armed = { ...encounter, guns: 7 };
-      const result = applyAction(armed, {
-        type: "resolve-encounter",
-        choice: "fight",
-      });
+      let result: GameState | undefined;
+      for (let rng = 1; rng < 1000 && !result; rng++) {
+        const candidate = applyAction(
+          { ...armed, rng },
+          { type: "resolve-encounter", choice: "fight" },
+        );
+        if (candidate.pendingOutcome?.nextPhase === "market")
+          result = candidate;
+      }
+      expect(result).toBeDefined();
+      if (!result) return;
       expect(result.guns).toBe(6);
       expect(result.phase).toBe("outcome");
       expect(result.pendingOutcome?.kind).toBe("police");
       expect(applyAction(result, { type: "continue" }).phase).toBe("market");
+    }
+  });
+
+  it("runs police chases in acknowledged rounds", () => {
+    const initial = startGame("Runner", "brooklyn", 17);
+    const chase: GameState = {
+      ...initial,
+      phase: "encounter",
+      guns: 5,
+      pendingEncounter: {
+        destination: "queens",
+        routeRisk: 0.5,
+        cargoValue: 0,
+        officers: 2,
+      },
+    };
+    let firstRound: GameState | undefined;
+    for (let rng = 1; rng < 1000 && !firstRound; rng++) {
+      const candidate = applyAction(
+        { ...chase, rng },
+        { type: "resolve-encounter", choice: "fight" },
+      );
+      if (candidate.pendingOutcome?.nextPhase === "encounter")
+        firstRound = candidate;
+    }
+    expect(firstRound?.pendingOutcome).toMatchObject({
+      kind: "police",
+      title: "You got one.",
+      nextPhase: "encounter",
+    });
+    if (!firstRound) return;
+    const continued = applyAction(firstRound, { type: "continue" });
+    expect(continued.phase).toBe("encounter");
+    expect(continued.pendingEncounter?.officers).toBe(1);
+
+    let finalRound: GameState | undefined;
+    for (let rng = 1; rng < 1000 && !finalRound; rng++) {
+      const candidate = applyAction(
+        { ...continued, rng },
+        { type: "resolve-encounter", choice: "fight" },
+      );
+      if (candidate.pendingOutcome?.nextPhase === "market")
+        finalRound = candidate;
+    }
+    expect(finalRound?.pendingOutcome?.title).toBe("You broke through.");
+    expect(
+      finalRound && applyAction(finalRound, { type: "continue" }).phase,
+    ).toBe("market");
+  });
+
+  it("shows the classic fatal result before game over in every police branch", () => {
+    const initial = startGame("Unlucky", "brooklyn", 18);
+    for (const choice of ["escape", "fight"] as const) {
+      const chase: GameState = {
+        ...initial,
+        health: 1,
+        guns: choice === "fight" ? 1 : 0,
+        phase: "encounter",
+        pendingEncounter: {
+          destination: "staten",
+          routeRisk: 0.82,
+          cargoValue: 0,
+          officers: 1,
+        },
+      };
+      let fatal: GameState | undefined;
+      for (let index = 1; index < 1000 && !fatal; index++) {
+        const candidate = applyAction(
+          { ...chase, rng: distributedRng(index) },
+          { type: "resolve-encounter", choice },
+        );
+        if (candidate.pendingOutcome?.nextPhase === "gameover")
+          fatal = candidate;
+      }
+      expect(fatal?.phase).toBe("outcome");
+      expect(fatal?.pendingOutcome).toMatchObject({
+        kind: "police",
+        title: "They wasted you!!!",
+        nextPhase: "gameover",
+      });
+      expect(fatal && applyAction(fatal, { type: "continue" }).phase).toBe(
+        "gameover",
+      );
     }
   });
 
@@ -168,19 +279,46 @@ describe("deterministic game engine", () => {
     expect(continued.pendingOutcome).toBeUndefined();
   });
 
+  it("restores debt-enforcer encounters and acknowledges a fatal beating", () => {
+    let encounter: GameState | undefined;
+    for (let seed = 1; seed < 1000 && !encounter; seed++) {
+      const indebted = {
+        ...startGame("Debtor", "brooklyn", seed),
+        debt: 30000,
+      };
+      const candidate = applyAction(indebted, {
+        type: "travel",
+        destination: "staten",
+      });
+      if (candidate.phase === "loan-shark") encounter = candidate;
+    }
+    expect(encounter).toBeDefined();
+    if (!encounter) return;
+    expect(encounter.pendingLoanSharkEncounter).toBeDefined();
+
+    const fatal = applyAction(
+      { ...encounter, cash: 1234, health: 1 },
+      { type: "resolve-loan-shark" },
+    );
+    expect(fatal.cash).toBe(0);
+    expect(fatal.health).toBe(0);
+    expect(fatal.phase).toBe("outcome");
+    expect(fatal.pendingOutcome).toMatchObject({
+      kind: "loan-shark",
+      title: "They wasted you!!!",
+      nextPhase: "gameover",
+    });
+    expect(fatal.pendingOutcome?.message).toContain("$1,234");
+    expect(applyAction(fatal, { type: "continue" }).phase).toBe("gameover");
+  });
+
   it("settles automatically on Day 30 with discounted liquidation", () => {
     let state = startGame("Finisher", "manhattan", 42);
     const id = state.market.listed[0];
     state = applyAction(state, { type: "buy", product: id, quantity: 4 });
     for (let i = 0; i < 29; i++) {
       state = applyAction(state, { type: "lay-low" });
-      if (state.phase === "encounter")
-        state = applyAction(state, {
-          type: "resolve-encounter",
-          choice: "escape",
-        });
-      if (state.phase === "outcome")
-        state = applyAction(state, { type: "continue" });
+      state = clearEncounter(state);
     }
     expect(state.day).toBe(30);
     expect(state.phase).toBe("market");
@@ -220,13 +358,7 @@ describe("deterministic game engine", () => {
         );
         const destination = options[(seed + state.day) % options.length].id;
         state = applyAction(state, { type: "travel", destination });
-        if (state.phase === "encounter")
-          state = applyAction(state, {
-            type: "resolve-encounter",
-            choice: "escape",
-          });
-        if (state.phase === "outcome")
-          state = applyAction(state, { type: "continue" });
+        state = clearEncounter(state);
 
         expect(state.day).toBeLessThanOrEqual(30);
         expect(state.cash).toBeGreaterThanOrEqual(0);
