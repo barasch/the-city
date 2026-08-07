@@ -1301,11 +1301,6 @@ function Game({
           tone={state.heat > 60 ? "danger-text" : ""}
         />
         <Stat label="Guns" value={`${state.guns}`} />
-        <Stat
-          label="Coat"
-          value={`${inventoryUnits(state)} / ${state.capacity}`}
-        />
-        <Stat label="Net worth" value={cash(net)} />
       </section>
       <Coat state={state} />
       <Market state={state} act={act} />
