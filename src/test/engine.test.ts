@@ -11,6 +11,10 @@ import {
 const clearEncounter = (state: GameState): GameState => {
   let next = state;
   for (let round = 0; round < 50; round++) {
+    if (next.phase === "notice") {
+      next = applyAction(next, { type: "continue-notice" });
+      continue;
+    }
     if (next.phase === "encounter") {
       next = applyAction(next, {
         type: "resolve-encounter",
@@ -89,9 +93,7 @@ describe("deterministic game engine", () => {
       beforeUnlistedSale.inventory[id].quantity,
     );
     state = { ...state, market: beforeUnlistedSale.market };
-    state = applyAction(state, { type: "borrow", amount: 100000 });
-    expect(state.phase).toBe("outcome");
-    state = applyAction(state, { type: "continue" });
+    state = { ...state, cash: 100000 };
     state = applyAction(state, { type: "buy", product: id, quantity: 70 });
     expect(state.inventory[id].quantity).toBe(72);
     expect(inventoryUnits(state)).toBe(72);
@@ -118,8 +120,12 @@ describe("deterministic game engine", () => {
     const baseline = initial.boroughs.queens.enforcement;
     const next = travelAndEscape(initial, "queens");
     expect(next.bank).toBe(Math.floor(initial.bank * 1.005));
-    expect(next.debt).toBe(Math.ceil(initial.debt * 1.015));
+    expect(next.debt).toBe(Math.ceil(initial.debt * 1.06));
     expect(next.boroughs.queens.enforcement).toBe(baseline);
+
+    const highDebt = { ...initial, debt: 26000 };
+    const highDebtNext = travelAndEscape(highDebt, "queens");
+    expect(highDebtNext.debt).toBe(Math.ceil(highDebt.debt * 1.11));
   });
 
   it("makes guns obtainable at home and consequential in a police encounter", () => {
@@ -143,8 +149,8 @@ describe("deterministic game engine", () => {
       applyAction(noGuns, { type: "resolve-encounter", choice: "fight" })
         .log[0],
     ).toContain("no guns");
-    // Find a deterministic one-officer encounter, then verify that a successful
-    // fight consumes one raw gun.
+    // Find a deterministic one-officer encounter, then verify that fighting
+    // does not consume a gun.
     let encounter: GameState | undefined;
     for (let seed = 1; seed < 1000 && !encounter; seed++) {
       const candidate = applyAction(startGame("Patrol", "brooklyn", seed), {
@@ -167,11 +173,50 @@ describe("deterministic game engine", () => {
       }
       expect(result).toBeDefined();
       if (!result) return;
-      expect(result.guns).toBe(6);
+      expect(result.guns).toBe(7);
       expect(result.phase).toBe("outcome");
       expect(result.pendingOutcome?.kind).toBe("police");
       expect(applyAction(result, { type: "continue" }).phase).toBe("market");
     }
+  });
+
+  it("keeps guns through fights but can lose one while escaping", () => {
+    const initial = startGame("Carrier", "brooklyn", 91);
+    const chase: GameState = {
+      ...initial,
+      guns: 1,
+      phase: "encounter",
+      pendingEncounter: {
+        destination: "staten",
+        routeRisk: 0.82,
+        cargoValue: 0,
+        officers: 1,
+      },
+    };
+    let dropped: GameState | undefined;
+    for (let index = 1; index < 10000 && !dropped; index++) {
+      const candidate = applyAction(
+        { ...chase, rng: distributedRng(index) },
+        { type: "resolve-encounter", choice: "escape" },
+      );
+      if (
+        candidate.pendingOutcome?.title === "You got away." &&
+        candidate.guns === 0
+      )
+        dropped = candidate;
+    }
+    expect(dropped?.pendingOutcome?.message).toContain("dropped a gun");
+
+    let failedFight: GameState | undefined;
+    for (let index = 1; index < 1000 && !failedFight; index++) {
+      const candidate = applyAction(
+        { ...chase, rng: distributedRng(index) },
+        { type: "resolve-encounter", choice: "fight" },
+      );
+      if (candidate.pendingOutcome?.title === "The patrol won the exchange.")
+        failedFight = candidate;
+    }
+    expect(failedFight?.guns).toBe(1);
   });
 
   it("runs police chases in acknowledged rounds", () => {
@@ -258,7 +303,10 @@ describe("deterministic game engine", () => {
   });
 
   it("requires an acknowledged result after loan shark actions", () => {
-    const initial = startGame("Borrower", "brooklyn", 29);
+    const initial = {
+      ...startGame("Borrower", "brooklyn", 29),
+      debt: 4000,
+    };
     const borrowed = applyAction(initial, { type: "borrow", amount: 750 });
     expect(borrowed.cash).toBe(initial.cash + 750);
     expect(borrowed.debt).toBe(initial.debt + 750);
@@ -277,6 +325,32 @@ describe("deterministic game engine", () => {
     const continued = applyAction(borrowed, { type: "continue" });
     expect(continued.phase).toBe("market");
     expect(continued.pendingOutcome).toBeUndefined();
+  });
+
+  it("preserves the opening loan price and caps later advances at $5,000 debt", () => {
+    const initial = startGame("Credit", "brooklyn", 30);
+    expect(initial.cash).toBe(5000);
+    expect(initial.debt).toBe(10000);
+
+    const refused = applyAction(initial, { type: "borrow", amount: 1 });
+    expect(refused.cash).toBe(initial.cash);
+    expect(refused.debt).toBe(initial.debt);
+    expect(refused.log[0]).toContain("get the debt below $5,000");
+
+    let reduced = applyAction(
+      { ...initial, cash: 11000 },
+      { type: "repay", amount: 6000 },
+    );
+    reduced = applyAction(reduced, { type: "continue" });
+    expect(reduced.debt).toBe(4000);
+    const advanced = applyAction(reduced, { type: "borrow", amount: 1000 });
+    expect(advanced.debt).toBe(5000);
+    expect(advanced.cash).toBe(reduced.cash + 1000);
+
+    const market = applyAction(advanced, { type: "continue" });
+    const overLimit = applyAction(market, { type: "borrow", amount: 1 });
+    expect(overLimit.debt).toBe(5000);
+    expect(overLimit.log[0]).toContain("loan shark laughs");
   });
 
   it("restores debt-enforcer encounters and acknowledges a fatal beating", () => {
@@ -334,7 +408,7 @@ describe("deterministic game engine", () => {
       let state = startGame("Listings", home, 20260807);
       const counts = [state.market.listed.length];
       for (let day = 1; day < 12; day++) {
-        state = applyAction(state, { type: "lay-low" });
+        state = clearEncounter(applyAction(state, { type: "lay-low" }));
         counts.push(state.market.listed.length);
       }
       return counts.reduce((total, count) => total + count, 0) / counts.length;
@@ -343,6 +417,85 @@ describe("deterministic game engine", () => {
       averageListings("staten"),
     );
     expect(averageListings("brooklyn")).toBeLessThan(PRODUCTS.length);
+  });
+
+  it("acknowledges the mandatory jelly-baby travel event without changing resources", () => {
+    let state = startGame("Jelly", "brooklyn", 101);
+    let found = false;
+    for (let day = 2; day <= 12 && !found; day++) {
+      const destination = state.current === "brooklyn" ? "queens" : "brooklyn";
+      const before = {
+        cash: state.cash,
+        bank: state.bank,
+        health: state.health,
+        guns: state.guns,
+        inventory: state.inventory,
+      };
+      const traveled = applyAction(
+        { ...state, health: 100, heat: 0 },
+        { type: "travel", destination },
+      );
+      const jelly = traveled.pendingNotices?.find((notice) =>
+        notice.message.includes('"Would you like a jelly, baby?"'),
+      );
+      if (jelly) {
+        found = true;
+        expect(jelly).toMatchObject({ kind: "travel", title: "On the subway" });
+        expect(traveled.cash).toBe(before.cash);
+        expect(traveled.bank).toBeGreaterThanOrEqual(before.bank);
+        expect(traveled.guns).toBe(before.guns);
+        expect(traveled.inventory).toEqual(before.inventory);
+      }
+      state = clearEncounter(traveled);
+    }
+    expect(found).toBe(true);
+  });
+
+  it("records actionable travel hints in field notes", () => {
+    let hinted: GameState | undefined;
+    for (let seed = 1; seed <= 200 && !hinted; seed++) {
+      let state = startGame("Tip", "brooklyn", seed);
+      for (let day = 2; day <= 8 && !hinted; day++) {
+        const destination =
+          state.current === "brooklyn" ? "queens" : "brooklyn";
+        const traveled = applyAction(state, { type: "travel", destination });
+        if (
+          traveled.pendingNotices?.some(
+            (notice) => notice.title === "A useful whisper",
+          )
+        )
+          hinted = traveled;
+        state = clearEncounter(traveled);
+        if (state.phase === "gameover") break;
+      }
+    }
+    expect(hinted).toBeDefined();
+    const notes = hinted
+      ? BOROUGHS.flatMap((borough) => hinted!.boroughs[borough.id].ledger.notes)
+      : [];
+    expect(notes.some((note) => note.includes("A contact expects"))).toBe(true);
+  });
+
+  it("produces discontinuous prices and acknowledged market shocks", () => {
+    let lowestRatio = Number.POSITIVE_INFINITY;
+    let highestRatio = 0;
+    let marketNoticeFound = false;
+    for (let seed = 1; seed <= 80; seed++) {
+      let state = startGame("Volatility", "brooklyn", seed);
+      for (let day = 2; day <= 10; day++) {
+        state = applyAction(clearEncounter(state), { type: "lay-low" });
+        if (state.pendingNotices?.some((notice) => notice.kind === "market"))
+          marketNoticeFound = true;
+        for (const item of PRODUCTS) {
+          const ratio = state.market.prices[item.id] / item.base;
+          lowestRatio = Math.min(lowestRatio, ratio);
+          highestRatio = Math.max(highestRatio, ratio);
+        }
+      }
+    }
+    expect(marketNoticeFound).toBe(true);
+    expect(lowestRatio).toBeLessThan(0.4);
+    expect(highestRatio).toBeGreaterThan(2.5);
   });
 
   it("keeps hundreds of complete seeded runs inside core invariants", () => {
@@ -379,7 +532,7 @@ describe("deterministic game engine", () => {
 
     let passive = startGame("Passive", "brooklyn", 1);
     while (passive.day < 30)
-      passive = applyAction(passive, { type: "lay-low" });
+      passive = clearEncounter(applyAction(passive, { type: "lay-low" }));
     passive = applyAction(passive, { type: "finish-day" });
     expect(passive.score?.value).toBeLessThan(0);
   });

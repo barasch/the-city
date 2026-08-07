@@ -140,7 +140,7 @@ export interface BoroughState {
   market: MarketSnapshot | null;
 }
 export type Phase =
-  "market" | "encounter" | "loan-shark" | "outcome" | "gameover";
+  "market" | "encounter" | "loan-shark" | "notice" | "outcome" | "gameover";
 export interface PendingEncounter {
   destination: BoroughId;
   routeRisk: number;
@@ -150,6 +150,11 @@ export interface PendingEncounter {
 }
 export interface PendingLoanSharkEncounter {
   destination: BoroughId;
+}
+export interface PendingNotice {
+  kind: "travel" | "market";
+  title: string;
+  message: string;
 }
 export interface PendingOutcome {
   kind: "police" | "loan-shark";
@@ -185,7 +190,10 @@ export interface GameState {
   phase: Phase;
   pendingEncounter?: PendingEncounter;
   pendingLoanSharkEncounter?: PendingLoanSharkEncounter;
+  pendingNotices?: PendingNotice[];
+  noticeReturnPhase?: "market" | "encounter" | "loan-shark";
   pendingOutcome?: PendingOutcome;
+  travelEventsSeen?: string[];
   log: string[];
   score?: Score;
 }
@@ -202,8 +210,11 @@ export type Action =
   | { type: "lay-low" }
   | { type: "resolve-encounter"; choice: "escape" | "fight" }
   | { type: "resolve-loan-shark" }
+  | { type: "continue-notice" }
   | { type: "continue" }
   | { type: "finish-day" };
+
+export const LOAN_SHARK_CREDIT_LIMIT = 5000;
 
 const BOROUGH_PROFILE: Record<
   BoroughId,
@@ -257,6 +268,20 @@ const PRODUCT_INDEX = Object.fromEntries(
 const BOROUGH_INDEX = Object.fromEntries(
   BOROUGHS.map((b, i) => [b.id, i]),
 ) as Record<BoroughId, number>;
+const PRODUCT_VOLATILITY: Record<ProductId, number> = {
+  green: 0.26,
+  acid: 0.66,
+  shrooms: 0.58,
+  speed: 0.42,
+  molly: 0.61,
+  coke: 0.48,
+  heroin: 0.54,
+  pills: 0.39,
+  meth: 0.76,
+  hash: 0.3,
+  opioids: 0.46,
+  peyote: 0.7,
+};
 
 const emptyInventory = (): Inventory =>
   Object.fromEntries(
@@ -328,10 +353,62 @@ function withOutcome(
       pendingEncounter:
         nextPhase === "encounter" ? state.pendingEncounter : undefined,
       pendingLoanSharkEncounter: undefined,
+      pendingNotices: undefined,
+      noticeReturnPhase: undefined,
       pendingOutcome: { kind, title, message, nextPhase },
     },
     message,
   );
+}
+
+function presentNotices(state: GameState): GameState {
+  if (!state.pendingNotices?.length) {
+    return {
+      ...state,
+      pendingNotices: undefined,
+      noticeReturnPhase: undefined,
+    };
+  }
+  if (
+    state.phase !== "market" &&
+    state.phase !== "encounter" &&
+    state.phase !== "loan-shark"
+  )
+    return state;
+  return {
+    ...state,
+    noticeReturnPhase: state.phase,
+    phase: "notice",
+  };
+}
+
+function continueNotice(state: GameState): GameState {
+  if (state.phase !== "notice" || !state.pendingNotices?.length)
+    return invalid(state, "there is no notice to continue from");
+  const remaining = state.pendingNotices.slice(1);
+  if (remaining.length) return { ...state, pendingNotices: remaining };
+  return {
+    ...state,
+    phase: state.noticeReturnPhase ?? "market",
+    pendingNotices: undefined,
+    noticeReturnPhase: undefined,
+  };
+}
+
+function addLedgerNote(
+  states: Record<BoroughId, BoroughState>,
+  id: BoroughId,
+  note: string,
+): Record<BoroughId, BoroughState> {
+  const old = states[id];
+  const notes = [
+    note,
+    ...old.ledger.notes.filter((entry) => entry !== note),
+  ].slice(0, 8);
+  return {
+    ...states,
+    [id]: { ...old, ledger: { ...old.ledger, notes } },
+  };
 }
 
 function makeMarket(
@@ -344,12 +421,12 @@ function makeMarket(
   const prices = {} as Record<ProductId, number>;
   const available: ProductId[] = [];
   for (const p of PRODUCTS) {
-    const noise =
-      1 +
-      (unit(hashSeed(seed, day, BOROUGH_INDEX[id], PRODUCT_INDEX[p.id], 31)) -
-        0.5) *
-        profile.volatility *
-        2;
+    const centeredNoise =
+      unit(hashSeed(seed, day, BOROUGH_INDEX[id], PRODUCT_INDEX[p.id], 31)) *
+        2 -
+      1;
+    const spread = PRODUCT_VOLATILITY[p.id] * (0.65 + profile.volatility * 2.4);
+    const noise = Math.exp(centeredNoise * spread);
     const roleBias =
       0.89 +
       unit(hashSeed(seed, PRODUCT_INDEX[p.id], BOROUGH_INDEX[id], 77)) * 0.27;
@@ -390,21 +467,113 @@ function eventFor(
   day: number,
   id: BoroughId,
 ): LocalCondition | undefined {
+  if (day === 1) return undefined;
   const roll = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 202));
-  if (roll > 0.22) return undefined;
+  if (roll > 0.28) return undefined;
   const index = hashSeed(seed, day, BOROUGH_INDEX[id], 203) % PRODUCTS.length;
   const p = PRODUCTS[index];
   const favorable = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 204)) > 0.45;
+  const magnitude = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 206));
   return {
     id: `${id}-${day}-${p.id}`,
     label: favorable
       ? `A seizure has tightened ${p.name} supply here.`
       : `A shipment has flooded the ${p.name} market.`,
     productId: p.id,
-    multiplier: favorable ? 1.48 : 0.58,
+    multiplier: favorable ? 2.2 + magnitude * 2.3 : 0.18 + magnitude * 0.3,
     enforcementDelta: favorable ? 0.12 : 0.03,
     daysLeft: 3 + (hashSeed(seed, day, BOROUGH_INDEX[id], 205) % 3),
   };
+}
+
+function addTravelNotice(state: GameState): GameState {
+  const seen = state.travelEventsSeen ?? [];
+  const jellyDay = 3 + (hashSeed(state.seed, 601) % 7);
+  let notice: PendingNotice | undefined;
+  let states = state.boroughs;
+  let eventId: string | undefined;
+
+  if (!seen.includes("jelly-baby") && state.day >= jellyDay) {
+    eventId = "jelly-baby";
+    notice = {
+      kind: "travel",
+      title: "On the subway",
+      message:
+        'An old lady on the subway says, "Would you like a jelly, baby?"',
+    };
+  } else {
+    const roll = unit(
+      hashSeed(state.seed, state.day, BOROUGH_INDEX[state.current], 602),
+    );
+    if (roll > 0.46) return state;
+    const selector = unit(
+      hashSeed(state.seed, state.day, BOROUGH_INDEX[state.current], 603),
+    );
+    if (state.debt > LOAN_SHARK_CREDIT_LIMIT && selector < 0.38) {
+      notice = {
+        kind: "travel",
+        title: "The same black car",
+        message:
+          "A black car keeps pace with the train. The loan shark has not forgotten you.",
+      };
+      states = addLedgerNote(
+        states,
+        state.current,
+        `Day ${state.day}: Signs of loan-shark pressure on this route.`,
+      );
+    } else if (state.heat >= 35 && selector < 0.72) {
+      notice = {
+        kind: "travel",
+        title: "Too much attention",
+        message:
+          "Two people on the platform stop talking when they see you. Your route is getting familiar.",
+      };
+      states = addLedgerNote(
+        states,
+        state.current,
+        `Day ${state.day}: The route showed signs of police attention.`,
+      );
+    } else {
+      const ordered = [...BOROUGHS].sort(
+        (a, b) =>
+          unit(hashSeed(state.seed, state.day, BOROUGH_INDEX[a.id], 604)) -
+          unit(hashSeed(state.seed, state.day, BOROUGH_INDEX[b.id], 604)),
+      );
+      const hinted = ordered
+        .map((candidate) => ({
+          borough: candidate,
+          condition: state.boroughs[candidate.id].condition
+            ? undefined
+            : eventFor(state.seed, state.day + 1, candidate.id),
+        }))
+        .find((candidate) => candidate.condition);
+      if (hinted?.condition) {
+        const message = `A contact expects this tomorrow in ${hinted.borough.name}: ${hinted.condition.label}`;
+        notice = { kind: "travel", title: "A useful whisper", message };
+        states = addLedgerNote(
+          states,
+          hinted.borough.id,
+          `Day ${state.day}: ${message}`,
+        );
+      } else {
+        notice = {
+          kind: "travel",
+          title: "Nothing useful",
+          message:
+            "A stranger hands you a matchbook with a phone number inside. The number is disconnected.",
+        };
+      }
+    }
+  }
+
+  if (!notice) return state;
+  const updated = {
+    ...state,
+    boroughs: states,
+    travelEventsSeen: eventId ? [...seen, eventId] : seen,
+    pendingNotices: [notice, ...(state.pendingNotices ?? [])],
+  };
+  return addLog(updated, `TRAVEL: ${notice.message}`);
 }
 
 function decayConditions(
@@ -457,7 +626,9 @@ function arrive(
   extraLog?: string,
 ): GameState {
   let states = decayConditions(state.boroughs);
-  const generated = eventFor(state.seed, day, destination);
+  const generated = states[destination].condition
+    ? undefined
+    : eventFor(state.seed, day, destination);
   const target = states[destination];
   // Enforcement is a durable borough baseline; the condition's delta is applied
   // only while that condition exists, so a crackdown cannot ratchet forever.
@@ -470,6 +641,12 @@ function arrive(
     states[destination].condition,
   );
   states = observe(states, market, day);
+  if (generated)
+    states = addLedgerNote(
+      states,
+      destination,
+      `Day ${day}: ${generated.label}`,
+    );
   let next: GameState = {
     ...state,
     day,
@@ -479,6 +656,16 @@ function arrive(
     phase: "market",
     pendingEncounter: undefined,
     pendingLoanSharkEncounter: undefined,
+    pendingNotices: generated
+      ? [
+          {
+            kind: "market",
+            title: "The market moved",
+            message: generated.label,
+          },
+        ]
+      : undefined,
+    noticeReturnPhase: undefined,
     pendingOutcome: undefined,
   };
   if (generated) next = addLog(next, `MARKET: ${generated.label}`);
@@ -509,6 +696,7 @@ export function startGame(
     capacity: 100,
     inventory: emptyInventory(),
     boroughs: boroughMap(),
+    travelEventsSeen: [],
     market: null as unknown as MarketSnapshot,
     phase: "market" as Phase,
     log: [
@@ -516,9 +704,11 @@ export function startGame(
     ],
   };
   const first = arrive(base, home, 1);
-  return addLog(
-    first,
-    "Your contact says: information is worth more than a lucky buy.",
+  return presentNotices(
+    addLog(
+      first,
+      "Your contact says: information is worth more than a lucky buy.",
+    ),
   );
 }
 
@@ -588,32 +778,49 @@ function service(
   if (!Number.isFinite(a) || a <= 0)
     return invalid(state, "amount must be positive");
   if (type === "deposit") {
-    const x = Math.min(a, state.cash);
+    if (a > state.cash)
+      return invalid(state, "the bank cannot deposit money you do not have");
     return addLog(
-      { ...state, cash: state.cash - x, bank: state.bank + x },
-      `Deposited $${x.toLocaleString()} at home.`,
+      { ...state, cash: state.cash - a, bank: state.bank + a },
+      `Deposited $${a.toLocaleString()} at home.`,
     );
   }
   if (type === "withdraw") {
-    const x = Math.min(a, state.bank);
+    if (a > state.bank)
+      return invalid(
+        state,
+        "the bank will not hand over money it does not hold",
+      );
     return addLog(
-      { ...state, cash: state.cash + x, bank: state.bank - x },
-      `Withdrew $${x.toLocaleString()} from the bank.`,
+      { ...state, cash: state.cash + a, bank: state.bank - a },
+      `Withdrew $${a.toLocaleString()} from the bank.`,
     );
   }
-  if (type === "borrow")
+  if (type === "borrow") {
+    const available = Math.max(0, LOAN_SHARK_CREDIT_LIMIT - state.debt);
+    if (a > available)
+      return invalid(
+        state,
+        available > 0
+          ? `the loan shark taps the ledger; only ${cashForLog(available)} is available`
+          : `the loan shark laughs; get the debt below ${cashForLog(LOAN_SHARK_CREDIT_LIMIT)} before asking again`,
+      );
     return withOutcome(
       { ...state, cash: state.cash + a, debt: state.debt + a },
       "loan-shark",
       "Money changed hands.",
       `The loan shark advanced $${a.toLocaleString()}.`,
     );
-  const x = Math.min(a, state.cash, state.debt);
+  }
+  if (a > state.debt)
+    return invalid(state, "the loan shark will not accept imaginary debt");
+  if (a > state.cash)
+    return invalid(state, "the loan shark wants cash you actually have");
   return withOutcome(
-    { ...state, cash: state.cash - x, debt: state.debt - x },
+    { ...state, cash: state.cash - a, debt: state.debt - a },
     "loan-shark",
     "Debt reduced.",
-    `Repaid $${x.toLocaleString()} of debt.`,
+    `Repaid $${a.toLocaleString()} of debt.`,
   );
 }
 
@@ -653,10 +860,11 @@ function nextRandom(state: GameState): [number, number] {
 }
 
 function applyInterest(state: GameState): GameState {
+  const debtRate = state.debt > LOAN_SHARK_ENFORCER_DEBT ? 0.11 : 0.06;
   return {
     ...state,
     bank: Math.floor(state.bank * 1.005),
-    debt: Math.ceil(state.debt * 1.015),
+    debt: Math.ceil(state.debt * (1 + debtRate)),
   };
 }
 
@@ -683,11 +891,13 @@ function travel(state: GameState, destination: BoroughId): GameState {
   if (destination === state.current)
     return invalid(state, "you are already there");
   const day = state.day + 1;
-  const arrival = arrive(
-    applyInterest(state),
-    destination,
-    day,
-    `You traveled from ${BOROUGHS.find((b) => b.id === state.current)?.name}.`,
+  const arrival = addTravelNotice(
+    arrive(
+      applyInterest(state),
+      destination,
+      day,
+      `You traveled from ${BOROUGHS.find((b) => b.id === state.current)?.name}.`,
+    ),
   );
   const [roll, rng] = nextRandom(arrival);
   const chance = encounterChance(arrival, destination);
@@ -700,36 +910,40 @@ function travel(state: GameState, destination: BoroughId): GameState {
     );
     const [officerRoll, encounterRng] = nextRandom(withRng);
     const officers = 1 + Math.floor(officerRoll * maxOfficers);
-    return addLog(
-      {
-        ...withRng,
-        rng: encounterRng,
-        phase: "encounter",
-        pendingEncounter: {
-          destination,
-          routeRisk: chance,
-          cargoValue: cargoValue(withRng),
-          officers,
+    return presentNotices(
+      addLog(
+        {
+          ...withRng,
+          rng: encounterRng,
+          phase: "encounter",
+          pendingEncounter: {
+            destination,
+            routeRisk: chance,
+            cargoValue: cargoValue(withRng),
+            officers,
+          },
         },
-      },
-      `POLICE: patrols have noticed your route. Choose escape or fight.`,
+        `POLICE: patrols have noticed your route. Choose escape or fight.`,
+      ),
     );
   }
   if (withRng.debt > LOAN_SHARK_ENFORCER_DEBT) {
     const [enforcerRoll, enforcerRng] = nextRandom(withRng);
     const checked = { ...withRng, rng: enforcerRng };
     if (enforcerRoll < LOAN_SHARK_ENFORCER_CHANCE)
-      return addLog(
-        {
-          ...checked,
-          phase: "loan-shark",
-          pendingLoanSharkEncounter: { destination },
-        },
-        "LOAN SHARK: the enforcers found you.",
+      return presentNotices(
+        addLog(
+          {
+            ...checked,
+            phase: "loan-shark",
+            pendingLoanSharkEncounter: { destination },
+          },
+          "LOAN SHARK: the enforcers found you.",
+        ),
       );
-    return addLog(checked, "The route is quiet.");
+    return presentNotices(addLog(checked, "The route is quiet."));
   }
-  return addLog(withRng, "The route is quiet.");
+  return presentNotices(addLog(withRng, "The route is quiet."));
 }
 
 function resolveEncounter(
@@ -752,25 +966,32 @@ function resolveEncounter(
       0.28,
       0.86,
     );
-    if (roll < chance)
+    const [dropRoll, escapeRng] = nextRandom({ ...state, rng });
+    const droppedGun = state.guns > 0 && dropRoll < 0.18;
+    if (roll < chance) {
       return withOutcome(
         {
           ...state,
-          rng,
+          rng: escapeRng,
+          guns: droppedGun ? state.guns - 1 : state.guns,
           phase: "market",
           pendingEncounter: undefined,
           heat: clamp(state.heat - 6, 0, 100),
         },
         "police",
         "You got away.",
-        "You slipped the patrol. Keep moving.",
+        droppedGun
+          ? "You slipped the patrol, but dropped a gun while running."
+          : "You slipped the patrol. Keep moving.",
       );
+    }
     const inventory = cloneInventory(state.inventory);
     for (const p of PRODUCTS)
       inventory[p.id].quantity = Math.floor(inventory[p.id].quantity * 0.72);
     const next = {
       ...state,
-      rng,
+      rng: escapeRng,
+      guns: droppedGun ? state.guns - 1 : state.guns,
       inventory,
       phase: "encounter" as Phase,
       heat: clamp(state.heat + 14, 0, 100),
@@ -789,7 +1010,9 @@ function resolveEncounter(
       next,
       "police",
       "You couldn't lose them.",
-      `You lost some of the bag and took a hit. ${officers} ${
+      `You lost some of the bag and took a hit.${
+        droppedGun ? " You dropped a gun while running." : ""
+      } ${officers} ${
         officers === 1 ? "officer is" : "officers are"
       } still chasing you.`,
       "encounter",
@@ -800,13 +1023,11 @@ function resolveEncounter(
     0.18,
     0.9,
   );
-  const guns = Math.max(0, state.guns - 1);
   if (roll < chance) {
     const remaining = officers - 1;
     const next = {
       ...state,
       rng,
-      guns,
       phase: (remaining > 0 ? "encounter" : "market") as Phase,
       pendingEncounter:
         remaining > 0 ? { ...encounter, officers: remaining } : undefined,
@@ -817,7 +1038,7 @@ function resolveEncounter(
         next,
         "police",
         "You broke through.",
-        `The last officer is down. One gun is gone; ${guns} remain.`,
+        `The last officer is down. You still have ${state.guns} gun${state.guns === 1 ? "" : "s"}.`,
       );
     return withOutcome(
       next,
@@ -825,7 +1046,7 @@ function resolveEncounter(
       "You got one.",
       `${remaining} ${
         remaining === 1 ? "officer is" : "officers are"
-      } still chasing you. One gun is gone; ${guns} remain.`,
+      } still chasing you. You still have ${state.guns} gun${state.guns === 1 ? "" : "s"}.`,
       "encounter",
     );
   }
@@ -835,7 +1056,6 @@ function resolveEncounter(
   const next = {
     ...state,
     rng,
-    guns,
     inventory,
     phase: "encounter" as Phase,
     heat: clamp(state.heat + 25, 0, 100),
@@ -960,11 +1180,13 @@ function layLow(state: GameState): GameState {
     state.day + 1,
     "You lay low. The city forgets you a little.",
   );
-  return addLog(next, "Health recovered and heat cooled.");
+  return presentNotices(addLog(next, "Health recovered and heat cooled."));
 }
 
 export function applyAction(state: GameState, action: Action): GameState {
+  if (action.type === "continue-notice") return continueNotice(state);
   if (action.type === "continue") return continueOutcome(state);
+  if (state.phase === "notice") return state;
   if (state.phase === "outcome") return state;
   if (state.phase === "gameover") return invalid(state, "this run is over");
   switch (action.type) {

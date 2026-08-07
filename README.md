@@ -2,7 +2,7 @@
 
 **The City** is the working title of a browser-first successor to the supplied Python game.
 
-The current build is a complete local vertical slice: choose a home borough, trade twelve products over thirty days, revisit evolving borough markets, use the bank and loan shark at home, manage debt, heat, health, capacity, and a raw gun count, survive multi-round police chases and debt-enforcer encounters, and finish with discounted Day 30 liquidation. Runs save automatically in the browser and completed scores remain on that device.
+The current build is a complete local vertical slice: choose a home borough, trade twelve products over thirty days, revisit independently moving borough markets, use the bank and loan shark at home, manage debt, heat, health, inventory, and a raw gun count, survive multi-round police chases and debt-enforcer encounters, and finish with discounted Day 30 liquidation. Product, bank, loan-shark, and travel actions use compact dialogs; market shocks and travel signals pause for acknowledgement and accumulate in field notes. Runs save automatically in the browser and completed scores remain on that device.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ npm run preview
 - `src/game/engine.ts` contains the serializable deterministic rules engine and seeded random source.
 - `src/game/storage.ts` owns browser save and personal-score persistence.
 - `src/App.tsx` renders the functional React interface.
-- `src/test/` covers replay, accounting, unlimited market depth, borough continuity, financing, multi-round and fatal encounters, guns, Day 30 settlement, availability, multi-seed invariants, save/resume, and personal-score retention.
+- `src/test/` covers replay, accounting, unlimited market depth, borough continuity, financing, service limits, market shocks, travel events, multi-round and fatal encounters, guns, Day 30 settlement, availability, multi-seed invariants, save/resume, and personal-score retention.
 
 The engine is deliberately independent of React so a later leaderboard service can replay submitted actions under the same versioned rules instead of trusting a score calculated by the browser.
 
@@ -37,7 +37,7 @@ The included workflow tests, builds, and deploys the `dist` directory whenever `
 ## Current boundaries
 
 - Product names, tuning, and event volume remain provisional.
-- Deferred travel-event requirements are recorded in `DESIGN-NOTES.md`.
+- The initial travel-event set is deliberately small; its expansion notes are recorded in `DESIGN-NOTES.md`.
 - The responsive layout is a functional baseline; phone portrait, phone landscape, tablet, and desktop still need hands-on browser review.
 - The anonymous public leaderboard is not in this static build. It will require a small service that issues run seeds, replays action logs, calculates accepted scores, and applies submission limits. No accounts are planned.
 - Location artwork is intentionally deferred.
