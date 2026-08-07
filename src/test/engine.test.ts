@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   applyAction,
   BOROUGHS,
+  fenceValue,
   GameState,
+  GUN_CATALOG,
   inventoryUnits,
+  localServiceError,
+  MAX_GUNS,
   PRODUCTS,
   startGame,
+  storedUnits,
+  weaponIds,
 } from "../game/engine";
 
 const clearEncounter = (state: GameState): GameState => {
@@ -59,7 +65,10 @@ describe("deterministic game engine", () => {
   });
 
   it("uses weighted average cost and has no quantity depth cap", () => {
-    let state = startGame("Accountant", "brooklyn", 5);
+    let state = {
+      ...startGame("Accountant", "brooklyn", 5),
+      cash: 100_000_000,
+    };
     const id = state.market.listed[0];
     const firstPrice = state.market.prices[id];
     state = applyAction(state, { type: "buy", product: id, quantity: 2 });
@@ -93,7 +102,7 @@ describe("deterministic game engine", () => {
       beforeUnlistedSale.inventory[id].quantity,
     );
     state = { ...state, market: beforeUnlistedSale.market };
-    state = { ...state, cash: 100000 };
+    state = { ...state, cash: 100_000_000 };
     state = applyAction(state, { type: "buy", product: id, quantity: 70 });
     expect(state.inventory[id].quantity).toBe(72);
     expect(inventoryUnits(state)).toBe(72);
@@ -129,11 +138,30 @@ describe("deterministic game engine", () => {
   });
 
   it("makes guns obtainable at home and consequential in a police encounter", () => {
-    let state = startGame("Armed", "brooklyn", 9);
+    let state = { ...startGame("Armed", "brooklyn", 9), cash: 20000 };
     expect(state.guns).toBe(0);
-    const bought = applyAction(state, { type: "buy-gun" });
+    const bought = applyAction(state, {
+      type: "buy-gun",
+      gun: GUN_CATALOG[0].id,
+    });
     expect(bought.guns).toBe(1);
-    expect(bought.cash).toBeLessThan(state.cash);
+    expect(bought.cash).toBe(state.cash - GUN_CATALOG[0].price);
+    const boughtAgain = applyAction(bought, {
+      type: "buy-gun",
+      gun: GUN_CATALOG[1].id,
+    });
+    expect(boughtAgain.guns).toBe(2);
+    expect(boughtAgain.cash).toBe(
+      state.cash - GUN_CATALOG[0].price - GUN_CATALOG[1].price,
+    );
+    let full = boughtAgain;
+    for (const gun of GUN_CATALOG.slice(2))
+      full = applyAction(full, { type: "buy-gun", gun: gun.id });
+    expect(full.guns).toBe(MAX_GUNS);
+    expect(weaponIds(full)).toEqual(GUN_CATALOG.map((gun) => gun.id));
+    const refused = applyAction(full, { type: "buy-gun" });
+    expect(refused.guns).toBe(MAX_GUNS);
+    expect(refused.log[0]).toContain(`only ${MAX_GUNS} guns`);
     // The engine refuses a fight with zero guns even if a malformed encounter is supplied.
     const noGuns = {
       ...bought,
@@ -161,7 +189,11 @@ describe("deterministic game engine", () => {
     }
     expect(encounter).toBeDefined();
     if (encounter) {
-      const armed = { ...encounter, guns: 7 };
+      const armed = {
+        ...encounter,
+        guns: MAX_GUNS,
+        weapons: GUN_CATALOG.map((gun) => gun.id),
+      };
       let result: GameState | undefined;
       for (let rng = 1; rng < 1000 && !result; rng++) {
         const candidate = applyAction(
@@ -173,11 +205,91 @@ describe("deterministic game engine", () => {
       }
       expect(result).toBeDefined();
       if (!result) return;
-      expect(result.guns).toBe(7);
+      expect(result.guns).toBe(MAX_GUNS);
       expect(result.phase).toBe("outcome");
       expect(result.pendingOutcome?.kind).toBe("police");
       expect(applyAction(result, { type: "continue" }).phase).toBe("market");
     }
+  });
+
+  it("gives every borough a distinct strategic local service", () => {
+    const brooklyn = startGame("Coat", "brooklyn", 41);
+    const largerCoat = applyAction(brooklyn, { type: "use-local-service" });
+    expect(largerCoat.capacity).toBe(150);
+    expect(largerCoat.cash).toBe(1000);
+    expect(localServiceError(largerCoat)).toContain("already the largest");
+
+    const queens: GameState = {
+      ...startGame("Patient", "brooklyn", 42),
+      current: "queens",
+      health: 31,
+    };
+    const treated = applyAction(queens, { type: "use-local-service" });
+    expect(treated.health).toBe(100);
+    expect(treated.cash).toBe(3500);
+    expect(treated.day).toBe(1);
+
+    const bronx: GameState = {
+      ...startGame("Armed", "brooklyn", 43),
+      current: "bronx",
+    };
+    const armed = applyAction(bronx, {
+      type: "buy-gun",
+      gun: GUN_CATALOG[0].id,
+    });
+    expect(armed.guns).toBe(1);
+    expect(armed.cash).toBe(4500);
+
+    const product = PRODUCTS[0].id;
+    const statenBase = startGame("Stored", "brooklyn", 44);
+    const staten: GameState = {
+      ...statenBase,
+      current: "staten",
+      inventory: {
+        ...statenBase.inventory,
+        [product]: { quantity: 4, avgCost: 100 },
+      },
+    };
+    const stored = applyAction(staten, {
+      type: "store",
+      product,
+      quantity: 2,
+    });
+    expect(stored.inventory[product].quantity).toBe(2);
+    expect(storedUnits(stored)).toBe(2);
+    expect(stored.day).toBe(1);
+    const retrieved = applyAction(stored, {
+      type: "retrieve",
+      product,
+      quantity: 1,
+    });
+    expect(retrieved.inventory[product].quantity).toBe(3);
+    expect(storedUnits(retrieved)).toBe(1);
+    const offer = fenceValue(retrieved);
+    const fenced = applyAction(retrieved, { type: "use-fence" });
+    expect(fenced.cash).toBe(retrieved.cash + offer);
+    expect(inventoryUnits(fenced)).toBe(0);
+    expect(storedUnits(fenced)).toBe(1);
+    expect(localServiceError(fenced, "fence")).toContain("coat is empty");
+  });
+
+  it("makes plastic surgery expensive, slow, and capable of clearing heat", () => {
+    const initial: GameState = {
+      ...startGame("New Face", "manhattan", 45),
+      cash: 50000,
+      heat: 91,
+    };
+    const changed = applyAction(initial, { type: "use-local-service" });
+    expect(changed.day).toBe(6);
+    expect(changed.cash).toBe(25000);
+    expect(changed.heat).toBe(0);
+    expect(changed.debt).toBeGreaterThan(initial.debt);
+    expect(changed.log.some((line) => line.includes("Plastic surgery"))).toBe(
+      true,
+    );
+
+    const tooLate = { ...initial, day: 27 };
+    expect(localServiceError(tooLate)).toContain("not 5 days left");
   });
 
   it("keeps guns through fights but can lose one while escaping", () => {
@@ -185,6 +297,7 @@ describe("deterministic game engine", () => {
     const chase: GameState = {
       ...initial,
       guns: 1,
+      weapons: [GUN_CATALOG[0].id],
       phase: "encounter",
       pendingEncounter: {
         destination: "staten",
@@ -205,7 +318,8 @@ describe("deterministic game engine", () => {
       )
         dropped = candidate;
     }
-    expect(dropped?.pendingOutcome?.message).toContain("dropped a gun");
+    expect(dropped?.pendingOutcome?.message).toContain(GUN_CATALOG[0].name);
+    expect(dropped && weaponIds(dropped)).toHaveLength(0);
 
     let failedFight: GameState | undefined;
     for (let index = 1; index < 1000 && !failedFight; index++) {
@@ -217,6 +331,7 @@ describe("deterministic game engine", () => {
         failedFight = candidate;
     }
     expect(failedFight?.guns).toBe(1);
+    expect(failedFight && weaponIds(failedFight)).toEqual([GUN_CATALOG[0].id]);
   });
 
   it("runs police chases in acknowledged rounds", () => {
@@ -371,7 +486,16 @@ describe("deterministic game engine", () => {
     expect(encounter.pendingLoanSharkEncounter).toBeDefined();
 
     const fatal = applyAction(
-      { ...encounter, cash: 1234, health: 1 },
+      {
+        ...encounter,
+        cash: 1234,
+        bank: 2000,
+        health: 1,
+        inventory: {
+          ...encounter.inventory,
+          coke: { quantity: 100, avgCost: 1 },
+        },
+      },
       { type: "resolve-loan-shark" },
     );
     expect(fatal.cash).toBe(0);
@@ -383,6 +507,7 @@ describe("deterministic game engine", () => {
       nextPhase: "gameover",
     });
     expect(fatal.pendingOutcome?.message).toContain("$1,234");
+    expect(fatal.score?.value).toBe(fatal.bank - fatal.debt);
     expect(applyAction(fatal, { type: "continue" }).phase).toBe("gameover");
   });
 
@@ -390,6 +515,13 @@ describe("deterministic game engine", () => {
     let state = startGame("Finisher", "manhattan", 42);
     const id = state.market.listed[0];
     state = applyAction(state, { type: "buy", product: id, quantity: 4 });
+    state = {
+      ...state,
+      storage: {
+        ...(state.storage ?? state.inventory),
+        [id]: { quantity: 2, avgCost: state.market.prices[id] },
+      },
+    };
     for (let i = 0; i < 29; i++) {
       state = applyAction(state, { type: "lay-low" });
       state = clearEncounter(state);
@@ -400,6 +532,7 @@ describe("deterministic game engine", () => {
     expect(state.phase).toBe("gameover");
     expect(state.score?.day).toBe(30);
     expect(inventoryUnits(state)).toBe(0);
+    expect(storedUnits(state)).toBe(0);
     expect(state.log[0]).toContain("liquidated");
   });
 
@@ -479,6 +612,8 @@ describe("deterministic game engine", () => {
   it("produces discontinuous prices and acknowledged market shocks", () => {
     let lowestRatio = Number.POSITIVE_INFINITY;
     let highestRatio = 0;
+    let premiumLow = Number.POSITIVE_INFINITY;
+    let premiumHigh = 0;
     let marketNoticeFound = false;
     for (let seed = 1; seed <= 80; seed++) {
       let state = startGame("Volatility", "brooklyn", seed);
@@ -490,12 +625,23 @@ describe("deterministic game engine", () => {
           const ratio = state.market.prices[item.id] / item.base;
           lowestRatio = Math.min(lowestRatio, ratio);
           highestRatio = Math.max(highestRatio, ratio);
+          if (item.id === "coke" || item.id === "heroin") {
+            premiumLow = Math.min(premiumLow, state.market.prices[item.id]);
+            premiumHigh = Math.max(premiumHigh, state.market.prices[item.id]);
+          }
         }
+        if (state.market.condition)
+          expect(state.market.listed).toContain(
+            state.market.condition.productId,
+          );
       }
     }
     expect(marketNoticeFound).toBe(true);
-    expect(lowestRatio).toBeLessThan(0.4);
-    expect(highestRatio).toBeGreaterThan(2.5);
+    expect(lowestRatio).toBeLessThan(0.25);
+    expect(highestRatio).toBeGreaterThan(4);
+    expect(premiumLow).toBeLessThan(5000);
+    expect(premiumHigh).toBeGreaterThanOrEqual(80000);
+    expect(premiumHigh * 150).toBeGreaterThanOrEqual(12_000_000);
   });
 
   it("keeps hundreds of complete seeded runs inside core invariants", () => {

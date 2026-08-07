@@ -2,7 +2,7 @@
 
 **The City** is the working title of a browser-first successor to the supplied Python game.
 
-The current build is a complete local vertical slice: choose a home borough, trade twelve products over thirty days, revisit independently moving borough markets, use the bank and loan shark at home, manage debt, heat, health, inventory, and a raw gun count, survive multi-round police chases and debt-enforcer encounters, and finish with discounted Day 30 liquidation. Product, bank, loan-shark, and travel actions use compact dialogs; market shocks and travel signals pause for acknowledgement and accumulate in field notes. Runs save automatically in the browser and completed scores remain on that device.
+The current build is a complete local vertical slice: choose a home borough, trade twelve products over thirty days, revisit independently moving borough markets, use the bank and loan shark at home, exploit location-specific services, manage debt, heat, health, coat capacity, storage, and a six-model gun collection, survive multi-round police chases and debt-enforcer encounters, and finish with discounted Day 30 liquidation. Product, financing, storage, service, and travel actions use compact dialogs; market shocks and travel signals pause for acknowledgement and accumulate in field notes. Runs save automatically in the browser and completed scores remain on that device.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ npm run preview
 - `src/game/engine.ts` contains the serializable deterministic rules engine and seeded random source.
 - `src/game/storage.ts` owns browser save and personal-score persistence.
 - `src/App.tsx` renders the functional React interface.
-- `src/test/` covers replay, accounting, unlimited market depth, borough continuity, financing, service limits, market shocks, travel events, multi-round and fatal encounters, guns, Day 30 settlement, availability, multi-seed invariants, save/resume, and personal-score retention.
+- `src/test/` covers replay, accounting, unlimited market depth, premium market scale, borough continuity, financing, local services, storage and fence transfers, service limits, market shocks, travel events, multi-round and fatal encounters, durable guns, Day 30 settlement, availability, multi-seed invariants, save/resume, and personal-score retention.
 
 The engine is deliberately independent of React so a later leaderboard service can replay submitted actions under the same versioned rules instead of trusting a score calculated by the browser.
 

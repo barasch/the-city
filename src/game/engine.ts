@@ -1,70 +1,88 @@
 /** Pure, serializable rules for the 30-day borough trading game. */
 
 export const PRODUCTS = [
-  { id: "green", name: "Green", role: "staple", base: 90, color: "#9be564" },
+  {
+    id: "green",
+    name: "Green",
+    role: "staple",
+    base: 400,
+    color: "#9be564",
+  },
   {
     id: "acid",
     name: "Acid",
     role: "event-sensitive",
-    base: 240,
+    base: 2500,
     color: "#d6b3ff",
   },
   {
     id: "shrooms",
     name: "Shrooms",
     role: "event-sensitive",
-    base: 180,
+    base: 950,
     color: "#f0c88a",
   },
   {
     id: "speed",
     name: "Speed",
     role: "steady middle",
-    base: 320,
+    base: 180,
     color: "#ffca69",
   },
   {
     id: "molly",
     name: "Molly",
     role: "nightlife",
-    base: 560,
+    base: 3500,
     color: "#ff91c8",
   },
   {
     id: "coke",
     name: "Coke",
     role: "import premium",
-    base: 950,
+    base: 20000,
     color: "#dfe8ef",
   },
   {
     id: "heroin",
     name: "Heroin",
     role: "scarce opioid",
-    base: 1250,
+    base: 10000,
     color: "#ff8d8d",
   },
   {
     id: "pills",
     name: "Pills",
     role: "prescription",
-    base: 480,
+    base: 75,
     color: "#87d9ff",
   },
-  { id: "meth", name: "Meth", role: "volatile", base: 720, color: "#e9f27b" },
-  { id: "hash", name: "Hash", role: "staple", base: 145, color: "#b4d18e" },
+  {
+    id: "meth",
+    name: "Meth",
+    role: "volatile",
+    base: 1800,
+    color: "#e9f27b",
+  },
+  {
+    id: "hash",
+    name: "Hash",
+    role: "staple",
+    base: 750,
+    color: "#b4d18e",
+  },
   {
     id: "opioids",
     name: "Opioids",
     role: "prescription",
-    base: 680,
+    base: 1200,
     color: "#a9b7ff",
   },
   {
     id: "peyote",
     name: "Peyote",
     role: "scarcity",
-    base: 380,
+    base: 500,
     color: "#c8f5a3",
   },
 ] as const;
@@ -99,6 +117,93 @@ export const BOROUGHS: { id: BoroughId; name: string; summary: string }[] = [
     summary: "Sparse listings, occasional scarcity premiums.",
   },
 ];
+
+export type LocalServiceId =
+  | "plastic-surgeon"
+  | "coat-maker"
+  | "clinic"
+  | "arms-dealer"
+  | "storage-unit"
+  | "fence";
+export interface LocalServiceOffer {
+  id: LocalServiceId;
+  label: string;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cost: number;
+  days: number;
+}
+export const GUN_CATALOG = [
+  { id: "taurus-g3c", name: "Taurus G3C", price: 500 },
+  { id: "sig-p365", name: "SIG Sauer P365", price: 650 },
+  { id: "glock-19", name: "Glock 19", price: 800 },
+  { id: "beretta-92fs", name: "Beretta 92FS", price: 950 },
+  { id: "colt-1911", name: "Colt 1911", price: 1200 },
+  { id: "colt-python", name: "Colt Python", price: 1500 },
+] as const;
+export type GunId = (typeof GUN_CATALOG)[number]["id"];
+export type GunDefinition = (typeof GUN_CATALOG)[number];
+export const MAX_GUNS = GUN_CATALOG.length;
+export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
+  manhattan: {
+    id: "plastic-surgeon",
+    label: "Visit plastic surgeon",
+    title: "A new face",
+    description:
+      "A new face costs $25,000 and takes five days. Your heat will fall to zero.",
+    confirmLabel: "Proceed",
+    cost: 25000,
+    days: 5,
+  },
+  brooklyn: {
+    id: "coat-maker",
+    label: "Buy larger coat",
+    title: "A larger coat",
+    description: "A larger coat costs $4,000 and adds 50 spaces.",
+    confirmLabel: "Buy",
+    cost: 4000,
+    days: 0,
+  },
+  queens: {
+    id: "clinic",
+    label: "Visit clinic",
+    title: "Private treatment",
+    description: "Treatment costs $1,500 and restores your health immediately.",
+    confirmLabel: "Get treatment",
+    cost: 1500,
+    days: 0,
+  },
+  bronx: {
+    id: "arms-dealer",
+    label: "Visit gun shop",
+    title: "Gun shop",
+    description: "Six models are available, while you have room to carry one.",
+    confirmLabel: "Choose a gun",
+    cost: 0,
+    days: 0,
+  },
+  staten: {
+    id: "storage-unit",
+    label: "Visit storage unit",
+    title: "Storage unit",
+    description:
+      "Leave stock here or retrieve it when you return to Staten Island.",
+    confirmLabel: "Manage storage",
+    cost: 0,
+    days: 0,
+  },
+};
+export const FENCE_SERVICE: LocalServiceOffer = {
+  id: "fence",
+  label: "Visit fence",
+  title: "No questions asked",
+  description:
+    "The fence will buy everything in your coat at a discount, including products not listed here today.",
+  confirmLabel: "Sell everything",
+  cost: 0,
+  days: 0,
+};
 
 export interface InventoryItem {
   quantity: number;
@@ -183,8 +288,12 @@ export interface GameState {
   health: number;
   heat: number;
   guns: number;
+  /** Optional so saves from the count-only gun system remain playable. */
+  weapons?: GunId[];
   capacity: number;
   inventory: Inventory;
+  /** Optional so saves created before the storage service remain playable. */
+  storage?: Inventory;
   boroughs: Record<BoroughId, BoroughState>;
   market: MarketSnapshot;
   phase: Phase;
@@ -198,14 +307,39 @@ export interface GameState {
   score?: Score;
 }
 
+/** Reconstructs named weapons for older saves that stored only a gun count. */
+export function weaponIds(state: GameState): GunId[] {
+  const count = Math.max(
+    0,
+    Math.min(
+      MAX_GUNS,
+      Number.isFinite(state.guns) ? Math.floor(state.guns) : 0,
+    ),
+  );
+  const valid = new Set<GunId>(GUN_CATALOG.map((gun) => gun.id));
+  const owned: GunId[] = [];
+  for (const id of state.weapons ?? []) {
+    if (valid.has(id) && !owned.includes(id)) owned.push(id);
+  }
+  for (const gun of GUN_CATALOG) {
+    if (owned.length >= count) break;
+    if (!owned.includes(gun.id)) owned.push(gun.id);
+  }
+  return owned.slice(0, count);
+}
+
 export type Action =
   | { type: "buy"; product: ProductId; quantity: number }
   | { type: "sell"; product: ProductId; quantity: number }
+  | { type: "store"; product: ProductId; quantity: number }
+  | { type: "retrieve"; product: ProductId; quantity: number }
   | { type: "deposit"; amount: number }
   | { type: "withdraw"; amount: number }
   | { type: "borrow"; amount: number }
   | { type: "repay"; amount: number }
-  | { type: "buy-gun" }
+  | { type: "buy-gun"; gun?: GunId }
+  | { type: "use-local-service" }
+  | { type: "use-fence" }
   | { type: "travel"; destination: BoroughId }
   | { type: "lay-low" }
   | { type: "resolve-encounter"; choice: "escape" | "fight" }
@@ -281,6 +415,10 @@ const PRODUCT_VOLATILITY: Record<ProductId, number> = {
   hash: 0.3,
   opioids: 0.46,
   peyote: 0.7,
+};
+const PRICE_CEILING: Partial<Record<ProductId, number>> = {
+  coke: 100000,
+  heroin: 100000,
 };
 
 const emptyInventory = (): Inventory =>
@@ -432,14 +570,19 @@ function makeMarket(
       unit(hashSeed(seed, PRODUCT_INDEX[p.id], BOROUGH_INDEX[id], 77)) * 0.27;
     const conditionMultiplier =
       local?.productId === p.id ? local.multiplier : 1;
+    const rawPrice =
+      p.base * profile.bias * roleBias * noise * conditionMultiplier;
     prices[p.id] = money(
-      p.base * profile.bias * roleBias * noise * conditionMultiplier,
+      Math.min(rawPrice, PRICE_CEILING[p.id] ?? Number.POSITIVE_INFINITY),
     );
     const listingRoll = unit(
       hashSeed(seed, day, BOROUGH_INDEX[id], PRODUCT_INDEX[p.id], 43),
     );
     if (listingRoll < profile.listing) available.push(p.id);
   }
+  // A shock is always actionable; sparse borough listings must not hide it.
+  if (local && !available.includes(local.productId))
+    available.push(local.productId);
   // Keep each market useful without introducing quantity/depth caps.
   if (available.length < 5) {
     const missing = PRODUCTS.filter((p) => !available.includes(p.id)).sort(
@@ -469,7 +612,7 @@ function eventFor(
 ): LocalCondition | undefined {
   if (day === 1) return undefined;
   const roll = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 202));
-  if (roll > 0.28) return undefined;
+  if (roll > 0.38) return undefined;
   const index = hashSeed(seed, day, BOROUGH_INDEX[id], 203) % PRODUCTS.length;
   const p = PRODUCTS[index];
   const favorable = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 204)) > 0.45;
@@ -480,9 +623,9 @@ function eventFor(
       ? `A seizure has tightened ${p.name} supply here.`
       : `A shipment has flooded the ${p.name} market.`,
     productId: p.id,
-    multiplier: favorable ? 2.2 + magnitude * 2.3 : 0.18 + magnitude * 0.3,
+    multiplier: favorable ? 2.8 + magnitude * 3.2 : 0.1 + magnitude * 0.22,
     enforcementDelta: favorable ? 0.12 : 0.03,
-    daysLeft: 3 + (hashSeed(seed, day, BOROUGH_INDEX[id], 205) % 3),
+    daysLeft: 2 + (hashSeed(seed, day, BOROUGH_INDEX[id], 205) % 3),
   };
 }
 
@@ -693,8 +836,10 @@ export function startGame(
     health: 100,
     heat: 0,
     guns: 0,
+    weapons: [],
     capacity: 100,
     inventory: emptyInventory(),
+    storage: emptyInventory(),
     boroughs: boroughMap(),
     travelEventsSeen: [],
     market: null as unknown as MarketSnapshot,
@@ -765,6 +910,53 @@ function sell(state: GameState, id: ProductId, quantity: number): GameState {
   );
 }
 
+function storageInventory(state: GameState): Inventory {
+  return state.storage ?? emptyInventory();
+}
+
+function transferStorage(
+  state: GameState,
+  id: ProductId,
+  quantity: number,
+  direction: "store" | "retrieve",
+): GameState {
+  if (state.phase !== "market")
+    return invalid(state, "finish the encounter first");
+  if (state.current !== "staten")
+    return invalid(state, "the storage unit is on Staten Island");
+  const q = Math.floor(quantity);
+  if (!Number.isFinite(q) || q <= 0)
+    return invalid(state, "quantity must be positive");
+  const inventory = cloneInventory(state.inventory);
+  const storage = cloneInventory(storageInventory(state));
+  const source = direction === "store" ? inventory[id] : storage[id];
+  const target = direction === "store" ? storage[id] : inventory[id];
+  if (q > source.quantity)
+    return invalid(
+      state,
+      direction === "store"
+        ? `you only carry ${source.quantity} ${productName(id)}`
+        : `only ${source.quantity} ${productName(id)} is in storage`,
+    );
+  if (
+    direction === "retrieve" &&
+    totalCargo(state.inventory) + q > state.capacity
+  )
+    return invalid(state, "your coat is full");
+  const movedCost = source.avgCost;
+  target.avgCost =
+    (target.quantity * target.avgCost + q * movedCost) / (target.quantity + q);
+  target.quantity += q;
+  source.quantity -= q;
+  if (source.quantity === 0) source.avgCost = 0;
+  return addLog(
+    { ...state, inventory, storage },
+    direction === "store"
+      ? `Stored ${q} ${productName(id)} on Staten Island.`
+      : `Retrieved ${q} ${productName(id)} from storage.`,
+  );
+}
+
 function service(
   state: GameState,
   type: "deposit" | "withdraw" | "borrow" | "repay",
@@ -824,29 +1016,131 @@ function service(
   );
 }
 
-function buyGun(state: GameState): GameState {
+function buyGun(state: GameState, gunId?: GunId): GameState {
   if (state.phase !== "market")
     return invalid(
       state,
       "the gear contact is unavailable during an encounter",
     );
-  if (state.current !== state.home)
-    return invalid(state, "gear is arranged through your home contact");
-  const price = 900 + state.guns * 180;
-  if (state.cash < price)
-    return invalid(state, `a gun costs ${cashForLog(price)} today`);
+  if (state.current !== state.home && state.current !== "bronx")
+    return invalid(
+      state,
+      "guns are available through your home contact or in The Bronx",
+    );
+  const owned = weaponIds(state);
+  if (state.guns >= MAX_GUNS || owned.length >= MAX_GUNS)
+    return invalid(state, `you can carry only ${MAX_GUNS} guns`);
+  const gun = gunId
+    ? GUN_CATALOG.find((candidate) => candidate.id === gunId)
+    : GUN_CATALOG.find((candidate) => !owned.includes(candidate.id));
+  if (!gun) return invalid(state, "that gun is not available");
+  if (owned.includes(gun.id))
+    return invalid(state, `you already carry a ${gun.name}`);
+  if (state.cash < gun.price)
+    return invalid(state, `${gun.name} costs ${cashForLog(gun.price)}`);
   return addLog(
     {
       ...state,
-      cash: state.cash - price,
+      cash: state.cash - gun.price,
       guns: state.guns + 1,
+      weapons: [...owned, gun.id],
       heat: clamp(state.heat + 4, 0, 100),
     },
-    `Bought a gun for ${cashForLog(price)}. Keep it quiet.`,
+    `Bought a ${gun.name} for ${cashForLog(gun.price)}. Keep it quiet.`,
   );
 }
 const cashForLog = (value: number): string =>
   `$${Math.round(value).toLocaleString()}`;
+
+export function fenceValue(state: GameState): number {
+  return Math.floor(
+    PRODUCTS.reduce(
+      (total, item) =>
+        total +
+        state.inventory[item.id].quantity * state.market.prices[item.id],
+      0,
+    ) * 0.7,
+  );
+}
+
+export function localServiceError(
+  state: GameState,
+  serviceId: LocalServiceId = LOCAL_SERVICES[state.current].id,
+): string | undefined {
+  if (state.phase !== "market") return "Finish the current encounter first.";
+  if (serviceId === "fence") {
+    if (state.current !== "staten") return "The fence is on Staten Island.";
+    if (totalCargo(state.inventory) < 1) return "Your coat is empty.";
+    return undefined;
+  }
+  const offer = LOCAL_SERVICES[state.current];
+  if (offer.id !== serviceId) return "That service is not available here.";
+  if (offer.id === "coat-maker" && state.capacity >= 150)
+    return "The coat you have is already the largest one available.";
+  if (offer.id === "clinic" && state.health >= 100)
+    return "The clinic cannot improve perfect health.";
+  if (offer.id === "arms-dealer" && state.guns >= MAX_GUNS)
+    return `You can carry only ${MAX_GUNS} guns.`;
+  if (offer.days > 0 && state.day + offer.days > 30)
+    return `There are not ${offer.days} days left in the run.`;
+  if (state.cash < offer.cost)
+    return `You need ${cashForLog(offer.cost)} in cash.`;
+  return undefined;
+}
+
+function useLocalService(state: GameState): GameState {
+  const error = localServiceError(state);
+  if (error) return invalid(state, error.toLowerCase());
+  const offer = LOCAL_SERVICES[state.current];
+  if (offer.id === "coat-maker")
+    return addLog(
+      {
+        ...state,
+        cash: state.cash - offer.cost,
+        capacity: state.capacity + 50,
+      },
+      `Bought a larger coat for ${cashForLog(offer.cost)}. Capacity is now ${state.capacity + 50}.`,
+    );
+  if (offer.id === "clinic")
+    return addLog(
+      { ...state, cash: state.cash - offer.cost, health: 100 },
+      `The clinic restored your health for ${cashForLog(offer.cost)}.`,
+    );
+  if (offer.id === "arms-dealer")
+    return invalid(state, "choose a gun from the shop's catalog");
+  if (offer.id === "storage-unit")
+    return invalid(state, "choose stock to store or retrieve");
+  if (offer.id === "plastic-surgeon") {
+    let next: GameState = {
+      ...state,
+      cash: state.cash - offer.cost,
+      heat: 0,
+    };
+    for (let day = 0; day < offer.days; day++)
+      next = arrive(applyInterest(next), next.current, next.day + 1);
+    return presentNotices(
+      addLog(
+        next,
+        `Plastic surgery cost ${cashForLog(offer.cost)} and ${offer.days} days. Your heat is gone.`,
+      ),
+    );
+  }
+  return state;
+}
+
+function useFence(state: GameState): GameState {
+  const error = localServiceError(state, "fence");
+  if (error) return invalid(state, error.toLowerCase());
+  const proceeds = fenceValue(state);
+  return addLog(
+    {
+      ...state,
+      cash: state.cash + proceeds,
+      inventory: emptyInventory(),
+    },
+    `The fence bought everything in your coat for ${cashForLog(proceeds)}.`,
+  );
+}
 const LOAN_SHARK_ENFORCER_DEBT = 25000;
 const LOAN_SHARK_ENFORCER_CHANCE = 0.3;
 
@@ -967,13 +1261,30 @@ function resolveEncounter(
       0.86,
     );
     const [dropRoll, escapeRng] = nextRandom({ ...state, rng });
+    const [dropChoiceRoll, finalRng] = nextRandom({
+      ...state,
+      rng: escapeRng,
+    });
     const droppedGun = state.guns > 0 && dropRoll < 0.18;
+    const owned = weaponIds(state);
+    const droppedIndex = droppedGun
+      ? Math.min(owned.length - 1, Math.floor(dropChoiceRoll * owned.length))
+      : -1;
+    const droppedWeapon = droppedIndex >= 0 ? owned[droppedIndex] : undefined;
+    const droppedName = droppedWeapon
+      ? GUN_CATALOG.find((gun) => gun.id === droppedWeapon)?.name
+      : undefined;
+    const remainingWeapons = droppedGun
+      ? owned.filter((_, index) => index !== droppedIndex)
+      : state.weapons;
+    const droppedLabel = droppedName ? `your ${droppedName}` : "a gun";
     if (roll < chance) {
       return withOutcome(
         {
           ...state,
-          rng: escapeRng,
+          rng: finalRng,
           guns: droppedGun ? state.guns - 1 : state.guns,
+          weapons: remainingWeapons,
           phase: "market",
           pendingEncounter: undefined,
           heat: clamp(state.heat - 6, 0, 100),
@@ -981,7 +1292,7 @@ function resolveEncounter(
         "police",
         "You got away.",
         droppedGun
-          ? "You slipped the patrol, but dropped a gun while running."
+          ? `You slipped the patrol, but dropped ${droppedLabel} while running.`
           : "You slipped the patrol. Keep moving.",
       );
     }
@@ -990,8 +1301,9 @@ function resolveEncounter(
       inventory[p.id].quantity = Math.floor(inventory[p.id].quantity * 0.72);
     const next = {
       ...state,
-      rng: escapeRng,
+      rng: finalRng,
       guns: droppedGun ? state.guns - 1 : state.guns,
+      weapons: remainingWeapons,
       inventory,
       phase: "encounter" as Phase,
       heat: clamp(state.heat + 14, 0, 100),
@@ -1011,7 +1323,7 @@ function resolveEncounter(
       "police",
       "You couldn't lose them.",
       `You lost some of the bag and took a hit.${
-        droppedGun ? " You dropped a gun while running." : ""
+        droppedGun ? ` You dropped ${droppedLabel} while running.` : ""
       } ${officers} ${
         officers === 1 ? "officer is" : "officers are"
       } still chasing you.`,
@@ -1120,9 +1432,13 @@ function continueOutcome(state: GameState): GameState {
 }
 
 function settle(state: GameState, reason = "Thirty days complete."): GameState {
+  const storage = storageInventory(state);
   const liquidation = PRODUCTS.reduce(
     (n, p) =>
-      n + state.inventory[p.id].quantity * state.market.prices[p.id] * 0.72,
+      n +
+      (state.inventory[p.id].quantity + storage[p.id].quantity) *
+        state.market.prices[p.id] *
+        0.72,
     0,
   );
   const value = Math.round(state.cash + state.bank + liquidation - state.debt);
@@ -1134,14 +1450,18 @@ function settle(state: GameState, reason = "Thirty days complete."): GameState {
     date: `Day ${state.day}`,
   };
   return addLog(
-    { ...state, phase: "gameover", score, inventory: emptyInventory() },
+    {
+      ...state,
+      phase: "gameover",
+      score,
+      inventory: emptyInventory(),
+      storage: emptyInventory(),
+    },
     `SETTLED: remaining stock liquidated at 72%. Final score $${value.toLocaleString()}.`,
   );
 }
 function endGame(state: GameState, reason: string): GameState {
-  const value = Math.round(
-    state.cash + state.bank - state.debt + cargoValue(state),
-  );
+  const value = Math.round(state.cash + state.bank - state.debt);
   return addLog(
     {
       ...state,
@@ -1194,13 +1514,26 @@ export function applyAction(state: GameState, action: Action): GameState {
       return buy(state, action.product, action.quantity);
     case "sell":
       return sell(state, action.product, action.quantity);
+    case "store":
+      return transferStorage(state, action.product, action.quantity, "store");
+    case "retrieve":
+      return transferStorage(
+        state,
+        action.product,
+        action.quantity,
+        "retrieve",
+      );
     case "deposit":
     case "withdraw":
     case "borrow":
     case "repay":
       return service(state, action.type, action.amount);
     case "buy-gun":
-      return buyGun(state);
+      return buyGun(state, action.gun);
+    case "use-local-service":
+      return useLocalService(state);
+    case "use-fence":
+      return useFence(state);
     case "travel":
       return travel(state, action.destination);
     case "lay-low":
@@ -1221,6 +1554,9 @@ export function inventoryUnits(state: GameState): number {
 }
 export function inventoryValue(state: GameState): number {
   return cargoValue(state);
+}
+export function storedUnits(state: GameState): number {
+  return totalCargo(storageInventory(state));
 }
 export function currentBorough(state: GameState): BoroughState {
   return state.boroughs[state.current];

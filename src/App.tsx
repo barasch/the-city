@@ -4,13 +4,21 @@ import {
   BOROUGHS,
   BoroughId,
   currentBorough,
+  fenceValue,
+  FENCE_SERVICE,
   GameState,
+  GUN_CATALOG,
   inventoryUnits,
-  inventoryValue,
+  localServiceError,
+  LOCAL_SERVICES,
+  MAX_GUNS,
+  type LocalServiceOffer,
   ProductId,
   PRODUCTS,
   startGame,
+  storedUnits,
   applyAction,
+  weaponIds,
 } from "./game/engine";
 import {
   loadGame,
@@ -55,7 +63,8 @@ function Instructions({ onClose }: { onClose: () => void }) {
             <h3>Thirty days</h3>
             <p>
               Build net worth by trading across five boroughs. Remaining stock
-              is sold at a discount after Day 30.
+              counts only after you sell it; anything left is liquidated at a
+              discount after Day 30.
             </p>
           </article>
           <article>
@@ -76,9 +85,9 @@ function Instructions({ onClose }: { onClose: () => void }) {
           <article>
             <h3>Home</h3>
             <p>
-              The bank, loan shark, and gear contact operate only in your home
-              borough. Your opening $5,000 comes with $10,000 debt. Bank
-              balances grow and debt compounds each day.
+              The bank and loan shark operate only in your home borough. Your
+              gun contact is at home; The Bronx has another shop. Your opening
+              $5,000 comes with $10,000 debt.
             </p>
           </article>
           <article>
@@ -94,7 +103,7 @@ function Instructions({ onClose }: { onClose: () => void }) {
             <h3>Lay low</h3>
             <p>
               Laying low restores health and reduces heat. Markets have no
-              quantity cap beyond cash, bag space, and the day’s listings.
+              quantity cap beyond cash, coat space, and the day’s listings.
             </p>
           </article>
         </div>
@@ -109,17 +118,14 @@ function Instructions({ onClose }: { onClose: () => void }) {
 function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
   const [name, setName] = useState("");
   const [home, setHome] = useState<BoroughId>("brooklyn");
-  const [seed, setSeed] = useState(() =>
-    Math.floor(Math.random() * 0xffffffff),
-  );
+  const [seed] = useState(() => Math.floor(Math.random() * 0xffffffff));
   const saved = loadGame();
   const scores = loadScores();
-  const selectedHome = BOROUGHS.find((borough) => borough.id === home);
   return (
     <main className="start shell">
       <div className="brand-title">
         <img src={BRAND_MARK} alt="" />
-        <h1>The City</h1>
+        <h1>THE CITY</h1>
       </div>
       <section className="start-card">
         <label>
@@ -143,7 +149,6 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
               </option>
             ))}
           </select>
-          <small className="home-summary">{selectedHome?.summary}</small>
         </label>
         <button
           className="primary big"
@@ -156,12 +161,6 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
             Resume {saved.name} · Day {saved.day}
           </button>
         )}
-        <button
-          className="text-button"
-          onClick={() => setSeed(Math.floor(Math.random() * 0xffffffff))}
-        >
-          Shuffle city
-        </button>
       </section>
       <section className="scores">
         <h2>Personal scores</h2>
@@ -242,6 +241,37 @@ function Dialog({
   );
 }
 
+function SectionToggle({
+  label,
+  expanded,
+  onToggle,
+  controlsId,
+  tag,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  controlsId: string;
+  tag?: string;
+}) {
+  return (
+    <div className="panel-heading">
+      <button
+        className="section-toggle"
+        aria-expanded={expanded}
+        aria-controls={controlsId}
+        onClick={onToggle}
+      >
+        <span>{label}</span>
+        <span className="section-toggle-icon" aria-hidden="true">
+          {expanded ? "−" : "+"}
+        </span>
+      </button>
+      {tag && <span className="tag">{tag}</span>}
+    </div>
+  );
+}
+
 function Market({
   state,
   act,
@@ -252,6 +282,7 @@ function Market({
   const [productId, setProductId] = useState<ProductId | null>(null);
   const [quantity, setQuantity] = useState(0);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(true);
   const product = productId
     ? PRODUCTS.find((item) => item.id === productId)
     : undefined;
@@ -294,38 +325,48 @@ function Market({
   }, [state.phase, state.day, state.current]);
   return (
     <section className="market panel">
-      <div className="panel-heading">
-        <h2>Market board</h2>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {PRODUCTS.map((p) => {
-              const listed = state.market.listed.includes(p.id);
-              return (
-                <tr key={p.id} className={!listed ? "unlisted" : ""}>
-                  <td>
-                    <button
-                      className="market-product"
-                      onClick={() => openProduct(p.id)}
-                    >
-                      <span className="dot" style={{ background: p.color }} />
-                      {p.name}
-                    </button>
-                  </td>
-                  <td>{listed ? cash(state.market.prices[p.id]) : "—"}</td>
+      <SectionToggle
+        label="Market"
+        expanded={expanded}
+        onToggle={() => setExpanded((value) => !value)}
+        controlsId="market-board-content"
+      />
+      {expanded && (
+        <div id="market-board-content" className="section-content">
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Price</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {PRODUCTS.map((p) => {
+                  const listed = state.market.listed.includes(p.id);
+                  return (
+                    <tr key={p.id} className={!listed ? "unlisted" : ""}>
+                      <td>
+                        <button
+                          className="market-product"
+                          onClick={() => openProduct(p.id)}
+                        >
+                          <span
+                            className="dot"
+                            style={{ background: p.color }}
+                          />
+                          {p.name}
+                        </button>
+                      </td>
+                      <td>{listed ? cash(state.market.prices[p.id]) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {product && (
         <Dialog title={product.name} eyebrow="MARKET" onClose={closeProduct}>
           <div className="dialog-facts">
@@ -395,6 +436,167 @@ function Market({
   );
 }
 
+function StorageDialog({
+  state,
+  act,
+  onClose,
+}: {
+  state: GameState;
+  act: (a: Action) => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"store" | "retrieve" | null>(null);
+  const [selected, setSelected] = useState<ProductId | null>(null);
+  const [quantity, setQuantity] = useState(0);
+  const storage = state.storage;
+  const products = PRODUCTS.filter((item) =>
+    mode === "store"
+      ? state.inventory[item.id].quantity > 0
+      : (storage?.[item.id].quantity ?? 0) > 0,
+  );
+  const available = selected
+    ? mode === "store"
+      ? state.inventory[selected].quantity
+      : Math.min(
+          storage?.[selected].quantity ?? 0,
+          state.capacity - inventoryUnits(state),
+        )
+    : 0;
+  const normalized = normalizeTradeQuantity(quantity);
+  const quantityError =
+    selected && available < 1
+      ? "There is no room in your coat."
+      : normalized < 1
+        ? "Enter a quantity."
+        : normalized > available
+          ? `Maximum: ${available}.`
+          : "";
+  const back = () => {
+    if (selected) {
+      setSelected(null);
+      setQuantity(0);
+    } else {
+      setMode(null);
+    }
+  };
+  const run = () => {
+    if (!mode || !selected || quantityError) return;
+    act({ type: mode, product: selected, quantity: normalized });
+    setSelected(null);
+    setQuantity(0);
+  };
+  return (
+    <Dialog title="Storage unit" eyebrow="STATEN ISLAND" onClose={onClose}>
+      {!mode ? (
+        <>
+          <div className="dialog-facts storage-facts">
+            <span>
+              Coat
+              <b>
+                {inventoryUnits(state)} / {state.capacity}
+              </b>
+            </span>
+            <span>
+              Stored
+              <b>{storedUnits(state)}</b>
+            </span>
+          </div>
+          <div className="choice-actions">
+            <button className="primary" onClick={() => setMode("store")}>
+              Store stock
+            </button>
+            <button
+              disabled={storedUnits(state) < 1}
+              onClick={() => setMode("retrieve")}
+            >
+              Retrieve stock
+            </button>
+            <button className="text-button" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : !selected ? (
+        <>
+          <p className="dialog-context">
+            {mode === "store"
+              ? "Choose stock to store."
+              : "Choose stock to retrieve."}
+          </p>
+          {products.length > 0 ? (
+            <div className="storage-product-list">
+              {products.map((item) => (
+                <button key={item.id} onClick={() => setSelected(item.id)}>
+                  <span>
+                    <i className="dot" style={{ background: item.color }} />
+                    {item.name}
+                  </span>
+                  <b>
+                    {mode === "store"
+                      ? state.inventory[item.id].quantity
+                      : (storage?.[item.id].quantity ?? 0)}
+                  </b>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="inline-error">
+              {mode === "store" ? "Your coat is empty." : "The unit is empty."}
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button onClick={back}>Back</button>
+            <button className="text-button" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="dialog-context">
+            {PRODUCTS.find((item) => item.id === selected)?.name} · {available}{" "}
+            max
+          </p>
+          <label className="dialog-quantity">
+            Quantity
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              max={available}
+              value={quantity}
+              onChange={(event) =>
+                setQuantity(normalizeTradeQuantity(Number(event.target.value)))
+              }
+            />
+          </label>
+          {quantityError && <p className="inline-error">{quantityError}</p>}
+          <div className="dialog-actions">
+            <button
+              className="primary"
+              disabled={Boolean(quantityError)}
+              onClick={run}
+            >
+              {mode === "store" ? "Store" : "Retrieve"}
+            </button>
+            <button
+              className="mini"
+              disabled={available < 1}
+              onClick={() => setQuantity(available)}
+            >
+              Max
+            </button>
+            <button onClick={back}>Back</button>
+            <button className="text-button" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 function Services({
   state,
   act,
@@ -403,6 +605,11 @@ function Services({
   act: (a: Action) => void;
 }) {
   const [dialog, setDialog] = useState<"bank" | "loan" | null>(null);
+  const [gunDialog, setGunDialog] = useState(false);
+  const [storageDialog, setStorageDialog] = useState(false);
+  const [localService, setLocalService] = useState<LocalServiceOffer | null>(
+    null,
+  );
   const [step, setStep] = useState<1 | 2>(1);
   const [serviceAction, setServiceAction] = useState<ServiceAction | null>(
     null,
@@ -411,12 +618,18 @@ function Services({
   const [error, setError] = useState("");
   const close = () => {
     setDialog(null);
+    setGunDialog(false);
+    setStorageDialog(false);
+    setLocalService(null);
     setStep(1);
     setServiceAction(null);
     setAmount(0);
     setError("");
   };
   const open = (which: "bank" | "loan") => {
+    setGunDialog(false);
+    setStorageDialog(false);
+    setLocalService(null);
     setDialog(which);
     setStep(1);
     setServiceAction(null);
@@ -443,37 +656,48 @@ function Services({
     setError("");
   };
   useEffect(() => {
-    if (state.current !== state.home || state.phase !== "market") close();
+    if (state.phase !== "market") close();
   }, [state.current, state.home, state.phase]);
-  if (state.current !== state.home) return null;
+  const isHome = state.current === state.home;
+  const localOffer = LOCAL_SERVICES[state.current];
+  const localIssue = localService
+    ? localServiceError(state, localService.id)
+    : undefined;
+  const ownedWeapons = weaponIds(state);
+  const openLocalOffer = (offer: LocalServiceOffer) => {
+    if (offer.id === "arms-dealer") setGunDialog(true);
+    else if (offer.id === "storage-unit") setStorageDialog(true);
+    else setLocalService(offer);
+  };
   return (
     <section className="panel services">
       <div className="panel-heading">
-        <h3>Home services</h3>
-        <span className="tag">HOME</span>
+        <h3>Local services</h3>
       </div>
-      <div className="service-row">
-        <div>
-          <b>Bank</b>
-          <small>Protected cash: {cash(state.bank)}</small>
-        </div>
-        <button onClick={() => open("bank")}>Open bank</button>
-      </div>
-      <div className="service-row">
-        <div>
-          <b>Loan shark</b>
-          {state.debt > 0 && <small>Debt: {cash(state.debt)}</small>}
-        </div>
-        <button onClick={() => open("loan")}>Open loan shark</button>
-      </div>
-      <div className="service-row">
-        <div>
-          <b>Gear contact</b>
-          <small>Next gun: {cash(900 + state.guns * 180)}</small>
-        </div>
-        <div className="service-actions">
-          <button onClick={() => act({ type: "buy-gun" })}>Buy a gun</button>
-        </div>
+      <div className="service-buttons">
+        {isHome && (
+          <>
+            <button onClick={() => open("bank")}>Visit bank</button>
+            <button onClick={() => open("loan")}>Visit loan shark</button>
+            <button onClick={() => setGunDialog(true)}>Buy a gun</button>
+          </>
+        )}
+        {!(isHome && localOffer.id === "arms-dealer") && (
+          <button
+            data-service-id={localOffer.id}
+            onClick={() => openLocalOffer(localOffer)}
+          >
+            {localOffer.label}
+          </button>
+        )}
+        {state.current === "staten" && (
+          <button
+            data-service-id={FENCE_SERVICE.id}
+            onClick={() => setLocalService(FENCE_SERVICE)}
+          >
+            {FENCE_SERVICE.label}
+          </button>
+        )}
       </div>
       {dialog && (
         <Dialog
@@ -583,37 +807,133 @@ function Services({
           )}
         </Dialog>
       )}
+      {gunDialog && (
+        <Dialog title="Buy a gun" eyebrow="LOCAL SERVICE" onClose={close}>
+          <p className="dialog-context">
+            {state.guns} / {MAX_GUNS} guns
+          </p>
+          <div className="gun-catalog">
+            {GUN_CATALOG.map((gun) => {
+              const owned = ownedWeapons.includes(gun.id);
+              const full = state.guns >= MAX_GUNS;
+              const short = state.cash < gun.price;
+              return (
+                <div className="gun-option" key={gun.id}>
+                  <span>
+                    <b>{gun.name}</b>
+                    <small>{cash(gun.price)}</small>
+                  </span>
+                  <button
+                    className={owned ? "" : "primary"}
+                    disabled={owned || full || short}
+                    onClick={() => act({ type: "buy-gun", gun: gun.id })}
+                  >
+                    {owned
+                      ? "Owned"
+                      : full
+                        ? "Full"
+                        : short
+                          ? "Need cash"
+                          : "Buy"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="dialog-actions gun-dialog-actions">
+            <button className="text-button" onClick={close}>
+              Done
+            </button>
+          </div>
+        </Dialog>
+      )}
+      {storageDialog && (
+        <StorageDialog state={state} act={act} onClose={close} />
+      )}
+      {localService && (
+        <Dialog
+          title={localService.title}
+          eyebrow="LOCAL SERVICE"
+          onClose={close}
+        >
+          <p className="dialog-context">
+            {localService.description}
+            {localService.id === "fence" &&
+              ` Today's offer is ${cash(fenceValue(state))}.`}
+          </p>
+          {localIssue && <p className="inline-error">{localIssue}</p>}
+          <div className="dialog-actions">
+            <button
+              className="primary"
+              disabled={Boolean(localIssue)}
+              onClick={() => {
+                act({
+                  type:
+                    localService.id === "fence"
+                      ? "use-fence"
+                      : "use-local-service",
+                });
+                close();
+              }}
+            >
+              {localService.confirmLabel}
+            </button>
+            <button className="text-button" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 }
 
-function Inventory({ state }: { state: GameState }) {
+function Coat({ state }: { state: GameState }) {
+  const [expanded, setExpanded] = useState(true);
   const carried = PRODUCTS.filter((p) => state.inventory[p.id].quantity > 0);
+  const weapons = weaponIds(state)
+    .map((id) => GUN_CATALOG.find((gun) => gun.id === id))
+    .filter((gun): gun is (typeof GUN_CATALOG)[number] => Boolean(gun));
   return (
     <section className="panel inventory-panel">
-      <div className="panel-heading">
-        <h3>Inventory</h3>
-        <span className="tag">
-          Trenchcoat · {inventoryUnits(state)} / {state.capacity}
-        </span>
-      </div>
-      {carried.length === 0 ? (
-        <p className="empty-inventory">Nothing carried yet.</p>
-      ) : (
-        <div className="inventory-list">
-          {carried.map((p) => {
-            const item = state.inventory[p.id];
-            return (
-              <div className="inventory-item" key={p.id}>
-                <span>
-                  <i className="dot" style={{ background: p.color }} />
-                  {p.name}
+      <SectionToggle
+        label="Coat"
+        tag={`${inventoryUnits(state)} / ${state.capacity}`}
+        expanded={expanded}
+        onToggle={() => setExpanded((value) => !value)}
+        controlsId="coat-content"
+      />
+      {expanded && (
+        <div id="coat-content" className="section-content">
+          {weapons.length > 0 && (
+            <div className="weapon-list">
+              <span className="weapon-list-label">Guns</span>
+              {weapons.map((gun) => (
+                <span className="weapon-chip" key={gun.id}>
+                  {gun.name}
                 </span>
-                <b>{item.quantity}</b>
-                <small>avg {cash(item.avgCost)}</small>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          )}
+          {carried.length === 0 && weapons.length === 0 ? (
+            <p className="empty-inventory">Nothing carried yet.</p>
+          ) : carried.length > 0 ? (
+            <div className="inventory-list">
+              {carried.map((p) => {
+                const item = state.inventory[p.id];
+                return (
+                  <div className="inventory-item" key={p.id}>
+                    <span>
+                      <i className="dot" style={{ background: p.color }} />
+                      {p.name}
+                    </span>
+                    <b>{item.quantity}</b>
+                    <small>avg {cash(item.avgCost)}</small>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       )}
     </section>
@@ -635,10 +955,16 @@ function Travel({
   };
   return (
     <section className="panel travel">
-      <div className="panel-heading">
-        <h3>Travel</h3>
+      <div className="travel-buttons">
         <button className="secondary" onClick={() => setOpen(true)}>
           Travel
+        </button>
+        <button
+          className="secondary"
+          disabled={state.day >= 30}
+          onClick={() => act({ type: "lay-low" })}
+        >
+          Lay low
         </button>
       </div>
       {open && (
@@ -659,16 +985,6 @@ function Travel({
             })}
           </div>
           <div className="dialog-actions">
-            <button
-              className="secondary"
-              disabled={state.day >= 30}
-              onClick={() => {
-                act({ type: "lay-low" });
-                close();
-              }}
-            >
-              Lay low
-            </button>
             <button className="text-button" onClick={close}>
               Cancel
             </button>
@@ -680,6 +996,7 @@ function Travel({
 }
 
 function Ledger({ state }: { state: GameState }) {
+  const [expanded, setExpanded] = useState(false);
   const here = currentBorough(state);
   const familiarity =
     here.familiarity >= 5
@@ -691,60 +1008,68 @@ function Ledger({ state }: { state: GameState }) {
           : "First impressions are all you have.";
   return (
     <aside className="panel journal">
-      <div className="panel-heading">
-        <h3>Field notes</h3>
-        <span className="tag">LEDGER</span>
-      </div>
-      <p className="familiarity">{familiarity}</p>
-      <div className="field-note-list">
-        {BOROUGHS.flatMap((b) =>
-          state.boroughs[b.id].ledger.notes.map((note, i) => (
-            <p key={`${b.id}-${i}-${note}`}>
-              <b>{b.name}</b> {note}
-            </p>
-          )),
-        )}
-        {BOROUGHS.every(
-          (b) => state.boroughs[b.id].ledger.notes.length === 0,
-        ) && <p className="muted">No notes yet. Travel and pay attention.</p>}
-      </div>
-      <details className="ledger-details">
-        <summary>All borough observations</summary>
-        <div className="ledger-boroughs">
-          {BOROUGHS.map((b) => {
-            const entry = state.boroughs[b.id].ledger;
-            const observations = Object.entries(entry.observations).sort(
-              ([, a], [, z]) => z.day - a.day,
-            );
-            return (
-              <article key={b.id}>
-                <h4>{b.name}</h4>
-                <p>
-                  {entry.lastVisitDay
-                    ? `Last seen Day ${entry.lastVisitDay} · ${entry.visits} visit${entry.visits === 1 ? "" : "s"}`
-                    : "Not yet visited"}
+      <SectionToggle
+        label="Field notes"
+        expanded={expanded}
+        onToggle={() => setExpanded((value) => !value)}
+        controlsId="field-notes-content"
+      />
+      {expanded && (
+        <div id="field-notes-content" className="section-content">
+          <p className="familiarity">{familiarity}</p>
+          <div className="field-note-list">
+            {BOROUGHS.flatMap((b) =>
+              state.boroughs[b.id].ledger.notes.map((note, i) => (
+                <p key={`${b.id}-${i}-${note}`}>
+                  <b>{b.name}</b> {note}
                 </p>
-                {observations.length > 0 && (
-                  <div className="ledger-prices">
-                    {observations.map(([id, seen]) => (
-                      <span key={id}>
-                        <b>{PRODUCTS.find((p) => p.id === id)?.name}</b>
-                        {cash(seen.price)} <i>D{seen.day}</i>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </article>
-            );
-          })}
+              )),
+            )}
+            {BOROUGHS.every(
+              (b) => state.boroughs[b.id].ledger.notes.length === 0,
+            ) && (
+              <p className="muted">No notes yet. Travel and pay attention.</p>
+            )}
+          </div>
+          <details className="ledger-details">
+            <summary>All borough observations</summary>
+            <div className="ledger-boroughs">
+              {BOROUGHS.map((b) => {
+                const entry = state.boroughs[b.id].ledger;
+                const observations = Object.entries(entry.observations).sort(
+                  ([, a], [, z]) => z.day - a.day,
+                );
+                return (
+                  <article key={b.id}>
+                    <h4>{b.name}</h4>
+                    <p>
+                      {entry.lastVisitDay
+                        ? `Last seen Day ${entry.lastVisitDay} · ${entry.visits} visit${entry.visits === 1 ? "" : "s"}`
+                        : "Not yet visited"}
+                    </p>
+                    {observations.length > 0 && (
+                      <div className="ledger-prices">
+                        {observations.map(([id, seen]) => (
+                          <span key={id}>
+                            <b>{PRODUCTS.find((p) => p.id === id)?.name}</b>
+                            {cash(seen.price)} <i>D{seen.day}</i>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </details>
+          <h4 className="recent-heading">Recent events</h4>
+          <ul>
+            {state.log.map((line, i) => (
+              <li key={`${line}-${i}`}>{line}</li>
+            ))}
+          </ul>
         </div>
-      </details>
-      <h4 className="recent-heading">Recent events</h4>
-      <ul>
-        {state.log.map((line, i) => (
-          <li key={`${line}-${i}`}>{line}</li>
-        ))}
-      </ul>
+      )}
     </aside>
   );
 }
@@ -900,7 +1225,7 @@ function Game({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [state.phase, instructionsOpen]);
-  const net = state.cash + state.bank + inventoryValue(state) - state.debt;
+  const net = state.cash + state.bank - state.debt;
   if (state.phase === "gameover")
     return (
       <main className="shell end">
@@ -925,31 +1250,29 @@ function Game({
   return (
     <main className="shell game">
       <header className="topbar">
-        <div>
-          <p className="eyebrow game-brand">
-            <img src={BRAND_MARK} alt="" />
-            <span>THE CITY · {state.name}</span>
-          </p>
-          <h1>{boroughName(state.current)}</h1>
-        </div>
-        <div className="topbar-actions">
-          <div className="day-track">
-            <span>DAY</span>
-            <strong>{state.day}</strong>
-            <small>of 30</small>
-            <div className="track">
-              <i style={{ width: `${(state.day / 30) * 100}%` }} />
-            </div>
-          </div>
+        <div className="topbar-left">
           <button
-            className="text-button leave-button"
+            className="game-home-link"
+            aria-label="Return to start screen"
             onClick={() => {
               saveGame(state);
               onLeave();
             }}
           >
-            Start screen
+            <span className="game-brand">
+              <img src={BRAND_MARK} alt="" />
+              <span>THE CITY</span>
+            </span>
           </button>
+          <h1>{boroughName(state.current)}</h1>
+        </div>
+        <div className="day-track">
+          <span>DAY</span>
+          <strong>{state.day}</strong>
+          <small>of 30</small>
+          <div className="track">
+            <i style={{ width: `${(state.day / 30) * 100}%` }} />
+          </div>
         </div>
       </header>
       <section className="stats">
@@ -970,20 +1293,16 @@ function Game({
         />
         <Stat label="Guns" value={`${state.guns}`} />
         <Stat
-          label="Bag"
+          label="Coat"
           value={`${inventoryUnits(state)} / ${state.capacity}`}
         />
         <Stat label="Net worth" value={cash(net)} />
       </section>
+      <Coat state={state} />
       <Market state={state} act={act} />
-      <Inventory state={state} />
-      <div className="lower-grid">
-        <div>
-          <Services state={state} act={act} />
-          <Travel state={state} act={act} />
-        </div>
-        <Ledger state={state} />
-      </div>
+      <Services state={state} act={act} />
+      <Travel state={state} act={act} />
+      <Ledger state={state} />
       {state.day === 30 && (
         <div className="day-actions">
           <button
