@@ -7,6 +7,7 @@ import {
   GameState,
   inventoryUnits,
   inventoryValue,
+  ProductId,
   PRODUCTS,
   startGame,
   applyAction,
@@ -18,10 +19,86 @@ import {
   saveGame,
   saveScore,
 } from "./game/storage";
+import {
+  maximumTradeQuantity,
+  normalizeTradeQuantity,
+} from "./game/tradeControls";
 
 const cash = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const BRAND_MARK = "./sb-a1.png";
 const boroughName = (id: BoroughId) =>
   BOROUGHS.find((b) => b.id === id)?.name ?? id;
+
+function InfoButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="info-button" onClick={onClick} aria-label="How to play">
+      <span aria-hidden="true">i</span>
+    </button>
+  );
+}
+
+function Instructions({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop">
+      <section
+        className="instructions-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="instructions-title"
+      >
+        <p className="eyebrow">THE CITY</p>
+        <h2 id="instructions-title">How to play</h2>
+        <div className="instructions-grid">
+          <article>
+            <h3>Thirty days</h3>
+            <p>
+              Build net worth by trading across five boroughs. Remaining stock
+              is sold at a discount after Day 30.
+            </p>
+          </article>
+          <article>
+            <h3>Trade</h3>
+            <p>
+              Enter a quantity, then buy or sell. Max fills the largest current
+              buy or sell quantity without completing a transaction.
+            </p>
+          </article>
+          <article>
+            <h3>Move</h3>
+            <p>
+              Travel and laying low each use a day. Revisit boroughs to turn
+              recorded prices and local conditions into useful knowledge.
+            </p>
+          </article>
+          <article>
+            <h3>Home</h3>
+            <p>
+              The bank, loan shark, and gear contact operate only in your home
+              borough. Bank balances grow and debt compounds each day.
+            </p>
+          </article>
+          <article>
+            <h3>Risk</h3>
+            <p>
+              Cargo, heat, routes, and local enforcement affect police risk.
+              Escape or fight, then acknowledge the outcome before continuing.
+            </p>
+          </article>
+          <article>
+            <h3>Lay low</h3>
+            <p>
+              Laying low restores health and reduces heat. Markets have no
+              quantity cap beyond cash, bag space, and the day’s listings.
+            </p>
+          </article>
+        </div>
+        <button className="primary" onClick={onClose}>
+          Minimize
+        </button>
+      </section>
+    </div>
+  );
+}
 
 function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
   const [name, setName] = useState("");
@@ -34,12 +111,10 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
   const selectedHome = BOROUGHS.find((borough) => borough.id === home);
   return (
     <main className="start shell">
-      <p className="eyebrow">A 30-day trading game</p>
-      <h1>The City</h1>
-      <p className="lede">
-        Five places. Twelve products. One month to learn the city before it
-        learns you.
-      </p>
+      <div className="brand-title">
+        <img src={BRAND_MARK} alt="" />
+        <h1>The City</h1>
+      </div>
       <section className="start-card">
         <label>
           Runner name
@@ -62,10 +137,7 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
               </option>
             ))}
           </select>
-          <small className="home-summary">
-            {selectedHome?.summary} Your bank, loan shark, and gear contact will
-            be here.
-          </small>
+          <small className="home-summary">{selectedHome?.summary}</small>
         </label>
         <button
           className="primary big"
@@ -132,16 +204,18 @@ function Market({
   act: (a: Action) => void;
 }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const getQ = (id: string) => quantities[id] ?? 1;
+  const getQ = (id: string) => quantities[id] ?? 0;
   const setQ = (id: string, value: number) =>
-    setQuantities((q) => ({ ...q, [id]: Math.max(1, Math.floor(value)) }));
+    setQuantities((q) => ({ ...q, [id]: normalizeTradeQuantity(value) }));
+  const transact = (id: ProductId, action: Action) => {
+    act(action);
+    setQ(id, 0);
+  };
+  useEffect(() => setQuantities({}), [state.day, state.current]);
   return (
     <section className="market panel">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">
-            Day {state.day} · {boroughName(state.current)}
-          </p>
           <h2>Market board</h2>
         </div>
         <p className="bulletin">{state.market.bulletin}</p>
@@ -176,6 +250,7 @@ function Market({
                     ),
                   )
                 : 0;
+              const maxTrade = maximumTradeQuantity(maxBuy, item.quantity);
               return (
                 <tr key={p.id} className={!listed ? "unlisted" : ""}>
                   <td>
@@ -196,36 +271,38 @@ function Market({
                         <input
                           aria-label={`${p.name} quantity`}
                           type="number"
-                          min="1"
+                          min="0"
                           value={q}
                           onChange={(e) => setQ(p.id, Number(e.target.value))}
                         />
                         <button
                           onClick={() =>
-                            act({ type: "buy", product: p.id, quantity: q })
+                            transact(p.id, {
+                              type: "buy",
+                              product: p.id,
+                              quantity: q,
+                            })
                           }
-                          disabled={maxBuy < q}
+                          disabled={q < 1 || maxBuy < q}
                         >
                           Buy
                         </button>
                         <button
                           onClick={() =>
-                            act({ type: "sell", product: p.id, quantity: q })
+                            transact(p.id, {
+                              type: "sell",
+                              product: p.id,
+                              quantity: q,
+                            })
                           }
-                          disabled={item.quantity < q}
+                          disabled={q < 1 || item.quantity < q}
                         >
                           Sell
                         </button>
                         <button
                           className="mini"
-                          onClick={() =>
-                            act({
-                              type: "buy",
-                              product: p.id,
-                              quantity: maxBuy,
-                            })
-                          }
-                          disabled={maxBuy < 1}
+                          onClick={() => setQ(p.id, maxTrade)}
+                          disabled={maxTrade < 1}
                         >
                           Max
                         </button>
@@ -238,10 +315,6 @@ function Market({
           </tbody>
         </table>
       </div>
-      <p className="hint">
-        Markets have no artificial quantity cap. Your cash, carry space, and the
-        current listing are the limits.
-      </p>
     </section>
   );
 }
@@ -304,9 +377,7 @@ function Services({
       <div className="service-row">
         <div>
           <b>Gear contact</b>
-          <small>
-            Raw guns improve fight odds; a gun costs more each time.
-          </small>
+          <small>Next gun: {cash(900 + state.guns * 180)}</small>
         </div>
         <div className="service-actions">
           <button onClick={() => act({ type: "buy-gun" })}>Buy a gun</button>
@@ -326,15 +397,9 @@ function Travel({
   return (
     <section className="panel travel">
       <div className="panel-heading">
-        <div>
-          <h3>Move through the city</h3>
-          <p className="muted">
-            Travel costs one day. Familiarity makes old observations more
-            useful.
-          </p>
-        </div>
+        <h3>Travel</h3>
         <button className="secondary" onClick={() => act({ type: "lay-low" })}>
-          Lay low <span>+health · −heat · 1 day</span>
+          Lay low
         </button>
       </div>
       <div className="borough-grid">
@@ -438,6 +503,28 @@ function Encounter({
   state: GameState;
   act: (a: Action) => void;
 }) {
+  if (state.phase === "outcome" && state.pendingOutcome) {
+    const outcome = state.pendingOutcome;
+    return (
+      <div className="encounter-backdrop">
+        <section className="encounter" role="dialog" aria-modal="true">
+          <p className="eyebrow">
+            {outcome.kind === "police" ? "POLICE ENCOUNTER" : "LOAN SHARK"}
+          </p>
+          <h2>{outcome.title}</h2>
+          <p>{outcome.message}</p>
+          <div className="encounter-actions">
+            <button
+              className="primary"
+              onClick={() => act({ type: "continue" })}
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
   if (state.phase !== "encounter") return null;
   return (
     <div className="encounter-backdrop">
@@ -465,16 +552,20 @@ function Encounter({
             F — Fight{state.guns < 1 ? " (no guns)" : ""}
           </button>
         </div>
-        <p className="hint">
-          Escape is safer but can cost part of the bag. Guns materially improve
-          a fight, and one may be lost.
-        </p>
       </section>
     </div>
   );
 }
 
-function Game({ initial, onNew }: { initial: GameState; onNew: () => void }) {
+function Game({
+  initial,
+  onNew,
+  instructionsOpen,
+}: {
+  initial: GameState;
+  onNew: () => void;
+  instructionsOpen: boolean;
+}) {
   const [state, setState] = useState(initial);
   const [scoresWritten, setScoresWritten] = useState(false);
   const act = (action: Action) =>
@@ -491,15 +582,19 @@ function Game({ initial, onNew }: { initial: GameState; onNew: () => void }) {
   }, [state, scoresWritten]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "l") act({ type: "lay-low" });
-      if (state.phase === "encounter" && event.key.toLowerCase() === "e")
+      if (instructionsOpen) return;
+      if (state.phase === "outcome" && event.key === "Enter")
+        act({ type: "continue" });
+      else if (state.phase === "encounter" && event.key.toLowerCase() === "e")
         act({ type: "resolve-encounter", choice: "escape" });
-      if (state.phase === "encounter" && event.key.toLowerCase() === "f")
+      else if (state.phase === "encounter" && event.key.toLowerCase() === "f")
         act({ type: "resolve-encounter", choice: "fight" });
+      else if (state.phase === "market" && event.key.toLowerCase() === "l")
+        act({ type: "lay-low" });
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [state.phase]);
+  }, [state.phase, instructionsOpen]);
   const net = state.cash + state.bank + inventoryValue(state) - state.debt;
   if (state.phase === "gameover")
     return (
@@ -526,7 +621,10 @@ function Game({ initial, onNew }: { initial: GameState; onNew: () => void }) {
     <main className="shell game">
       <header className="topbar">
         <div>
-          <p className="eyebrow">THE CITY · {state.name}</p>
+          <p className="eyebrow game-brand">
+            <img src={BRAND_MARK} alt="" />
+            <span>THE CITY · {state.name}</span>
+          </p>
           <h1>{boroughName(state.current)}</h1>
         </div>
         <div className="day-track">
@@ -567,19 +665,16 @@ function Game({ initial, onNew }: { initial: GameState; onNew: () => void }) {
         </div>
         <Ledger state={state} />
       </div>
-      <div className="day-actions">
-        <span>When you are ready:</span>
-        {state.day === 30 ? (
+      {state.day === 30 && (
+        <div className="day-actions">
           <button
             className="primary"
             onClick={() => act({ type: "finish-day" })}
           >
             Settle Day 30
           </button>
-        ) : (
-          <span className="muted">Travel or lay low to advance the day.</span>
-        )}
-      </div>
+        </div>
+      )}
       <Encounter state={state} act={act} />
     </main>
   );
@@ -587,15 +682,33 @@ function Game({ initial, onNew }: { initial: GameState; onNew: () => void }) {
 
 export default function App() {
   const [game, setGame] = useState<GameState | null>(null);
-  return game ? (
-    <Game
-      initial={game}
-      onNew={() => {
-        localStorage.removeItem(SAVE_KEY);
-        setGame(null);
-      }}
-    />
-  ) : (
-    <StartScreen onStart={setGame} />
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  useEffect(() => {
+    if (!instructionsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setInstructionsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [instructionsOpen]);
+  return (
+    <>
+      <InfoButton onClick={() => setInstructionsOpen(true)} />
+      {game ? (
+        <Game
+          initial={game}
+          instructionsOpen={instructionsOpen}
+          onNew={() => {
+            localStorage.removeItem(SAVE_KEY);
+            setGame(null);
+          }}
+        />
+      ) : (
+        <StartScreen onStart={setGame} />
+      )}
+      {instructionsOpen && (
+        <Instructions onClose={() => setInstructionsOpen(false)} />
+      )}
+    </>
   );
 }

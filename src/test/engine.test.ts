@@ -15,6 +15,7 @@ const travelAndEscape = (
   let next = applyAction(state, { type: "travel", destination });
   if (next.phase === "encounter")
     next = applyAction(next, { type: "resolve-encounter", choice: "escape" });
+  if (next.phase === "outcome") next = applyAction(next, { type: "continue" });
   return next;
 };
 
@@ -69,6 +70,8 @@ describe("deterministic game engine", () => {
     );
     state = { ...state, market: beforeUnlistedSale.market };
     state = applyAction(state, { type: "borrow", amount: 100000 });
+    expect(state.phase).toBe("outcome");
+    state = applyAction(state, { type: "continue" });
     state = applyAction(state, { type: "buy", product: id, quantity: 70 });
     expect(state.inventory[id].quantity).toBe(72);
     expect(inventoryUnits(state)).toBe(72);
@@ -137,7 +140,32 @@ describe("deterministic game engine", () => {
         choice: "fight",
       });
       expect(result.guns).toBe(6);
+      expect(result.phase).toBe("outcome");
+      expect(result.pendingOutcome?.kind).toBe("police");
+      expect(applyAction(result, { type: "continue" }).phase).toBe("market");
     }
+  });
+
+  it("requires an acknowledged result after loan shark actions", () => {
+    const initial = startGame("Borrower", "brooklyn", 29);
+    const borrowed = applyAction(initial, { type: "borrow", amount: 750 });
+    expect(borrowed.cash).toBe(initial.cash + 750);
+    expect(borrowed.debt).toBe(initial.debt + 750);
+    expect(borrowed.phase).toBe("outcome");
+    expect(borrowed.pendingOutcome).toMatchObject({
+      kind: "loan-shark",
+      nextPhase: "market",
+    });
+    expect(
+      applyAction(borrowed, {
+        type: "buy",
+        product: borrowed.market.listed[0],
+        quantity: 1,
+      }),
+    ).toEqual(borrowed);
+    const continued = applyAction(borrowed, { type: "continue" });
+    expect(continued.phase).toBe("market");
+    expect(continued.pendingOutcome).toBeUndefined();
   });
 
   it("settles automatically on Day 30 with discounted liquidation", () => {
@@ -151,6 +179,8 @@ describe("deterministic game engine", () => {
           type: "resolve-encounter",
           choice: "escape",
         });
+      if (state.phase === "outcome")
+        state = applyAction(state, { type: "continue" });
     }
     expect(state.day).toBe(30);
     expect(state.phase).toBe("market");
@@ -195,6 +225,8 @@ describe("deterministic game engine", () => {
             type: "resolve-encounter",
             choice: "escape",
           });
+        if (state.phase === "outcome")
+          state = applyAction(state, { type: "continue" });
 
         expect(state.day).toBeLessThanOrEqual(30);
         expect(state.cash).toBeGreaterThanOrEqual(0);

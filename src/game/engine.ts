@@ -139,11 +139,17 @@ export interface BoroughState {
   ledger: LedgerEntry;
   market: MarketSnapshot | null;
 }
-export type Phase = "market" | "encounter" | "gameover";
+export type Phase = "market" | "encounter" | "outcome" | "gameover";
 export interface PendingEncounter {
   destination: BoroughId;
   routeRisk: number;
   cargoValue: number;
+}
+export interface PendingOutcome {
+  kind: "police" | "loan-shark";
+  title: string;
+  message: string;
+  nextPhase: "market" | "gameover";
 }
 export interface Score {
   name: string;
@@ -172,6 +178,7 @@ export interface GameState {
   market: MarketSnapshot;
   phase: Phase;
   pendingEncounter?: PendingEncounter;
+  pendingOutcome?: PendingOutcome;
   log: string[];
   score?: Score;
 }
@@ -187,6 +194,7 @@ export type Action =
   | { type: "travel"; destination: BoroughId }
   | { type: "lay-low" }
   | { type: "resolve-encounter"; choice: "escape" | "fight" }
+  | { type: "continue" }
   | { type: "finish-day" };
 
 const BOROUGH_PROFILE: Record<
@@ -295,6 +303,24 @@ const addLog = (state: GameState, message: string): GameState => ({
   ...state,
   log: [message, ...state.log].slice(0, 18),
 });
+
+function withOutcome(
+  state: GameState,
+  kind: PendingOutcome["kind"],
+  title: string,
+  message: string,
+): GameState {
+  const nextPhase = state.phase === "gameover" ? "gameover" : "market";
+  return addLog(
+    {
+      ...state,
+      phase: "outcome",
+      pendingEncounter: undefined,
+      pendingOutcome: { kind, title, message, nextPhase },
+    },
+    message,
+  );
+}
 
 function makeMarket(
   seed: number,
@@ -440,6 +466,7 @@ function arrive(
     market,
     phase: "market",
     pendingEncounter: undefined,
+    pendingOutcome: undefined,
   };
   if (generated) next = addLog(next, `MARKET: ${generated.label}`);
   if (extraLog) next = addLog(next, extraLog);
@@ -562,13 +589,17 @@ function service(
     );
   }
   if (type === "borrow")
-    return addLog(
+    return withOutcome(
       { ...state, cash: state.cash + a, debt: state.debt + a },
+      "loan-shark",
+      "Money changed hands.",
       `The loan shark advanced $${a.toLocaleString()}.`,
     );
   const x = Math.min(a, state.cash, state.debt);
-  return addLog(
+  return withOutcome(
     { ...state, cash: state.cash - x, debt: state.debt - x },
+    "loan-shark",
+    "Debt reduced.",
     `Repaid $${x.toLocaleString()} of debt.`,
   );
 }
@@ -683,7 +714,7 @@ function resolveEncounter(
       0.86,
     );
     if (roll < chance)
-      return addLog(
+      return withOutcome(
         {
           ...state,
           rng,
@@ -691,6 +722,8 @@ function resolveEncounter(
           pendingEncounter: undefined,
           heat: clamp(state.heat - 6, 0, 100),
         },
+        "police",
+        "You got away.",
         "You slipped the patrol. Keep moving.",
       );
     const inventory = cloneInventory(state.inventory);
@@ -705,10 +738,19 @@ function resolveEncounter(
       heat: clamp(state.heat + 14, 0, 100),
       health: state.health - 18,
     };
-    if (next.health <= 0)
-      return endGame(next, "You were hurt escaping the patrol.");
-    return addLog(
+    if (next.health <= 0) {
+      const ended = endGame(next, "You were hurt escaping the patrol.");
+      return withOutcome(
+        ended,
+        "police",
+        "The escape ended the run.",
+        "You were hurt escaping the patrol.",
+      );
+    }
+    return withOutcome(
       next,
+      "police",
+      "You got away—barely.",
       "You escaped, but lost some of the bag and took a hit.",
     );
   }
@@ -719,7 +761,7 @@ function resolveEncounter(
   );
   const guns = Math.max(0, state.guns - 1);
   if (roll < chance)
-    return addLog(
+    return withOutcome(
       {
         ...state,
         rng,
@@ -728,6 +770,8 @@ function resolveEncounter(
         pendingEncounter: undefined,
         heat: clamp(state.heat + 10, 0, 100),
       },
+      "police",
+      "You broke through.",
       `You fought through. One gun is gone; ${guns} remain.`,
     );
   const inventory = cloneInventory(state.inventory);
@@ -743,11 +787,31 @@ function resolveEncounter(
     heat: clamp(state.heat + 25, 0, 100),
     health: state.health - 38,
   };
-  if (next.health <= 0) return endGame(next, "The fight went badly.");
-  return addLog(
+  if (next.health <= 0) {
+    const ended = endGame(next, "The fight went badly.");
+    return withOutcome(
+      ended,
+      "police",
+      "The fight ended the run.",
+      "The fight went badly.",
+    );
+  }
+  return withOutcome(
     next,
+    "police",
+    "The patrol won the exchange.",
     "The fight went badly. Half the bag is gone and you are hurt.",
   );
+}
+
+function continueOutcome(state: GameState): GameState {
+  if (state.phase !== "outcome" || !state.pendingOutcome)
+    return invalid(state, "there is no outcome to continue from");
+  return {
+    ...state,
+    phase: state.pendingOutcome.nextPhase,
+    pendingOutcome: undefined,
+  };
 }
 
 function settle(state: GameState, reason = "Thirty days complete."): GameState {
@@ -815,6 +879,8 @@ function layLow(state: GameState): GameState {
 }
 
 export function applyAction(state: GameState, action: Action): GameState {
+  if (action.type === "continue") return continueOutcome(state);
+  if (state.phase === "outcome") return state;
   if (state.phase === "gameover") return invalid(state, "this run is over");
   switch (action.type) {
     case "buy":
