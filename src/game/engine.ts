@@ -146,6 +146,13 @@ export const GUN_CATALOG = [
 export type GunId = (typeof GUN_CATALOG)[number]["id"];
 export type GunDefinition = (typeof GUN_CATALOG)[number];
 export const MAX_GUNS = GUN_CATALOG.length;
+
+export function policeFightSuccessChance(guns: number, health: number): number {
+  const gunCount = clamp(Math.floor(guns), 0, MAX_GUNS);
+  if (gunCount < 1) return 0;
+  return clamp(0.2 + clamp(health, 0, 100) / 400 + gunCount * 0.083, 0.2, 0.95);
+}
+
 export const LOCAL_SERVICES: Record<BoroughId, LocalServiceOffer> = {
   manhattan: {
     id: "plastic-surgeon",
@@ -1409,11 +1416,7 @@ function resolveEncounter(
       "encounter",
     );
   }
-  const chance = clamp(
-    0.24 + state.guns * 0.14 + state.health / 360,
-    0.18,
-    0.9,
-  );
+  const chance = policeFightSuccessChance(state.guns, state.health);
   if (roll < chance) {
     const remaining = officers - 1;
     const next = {

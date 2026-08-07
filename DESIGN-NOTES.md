@@ -66,4 +66,7 @@ The catalog contains one each of Taurus G3C ($500), SIG Sauer P365 ($650), Glock
 19 ($800), Beretta 92FS ($950), Colt 1911 ($1,200), and Colt Python ($1,500).
 The player can carry all six but cannot buy duplicates. Fighting never consumes
 a gun; an unsuccessful or successful escape can cause one named gun to be
-dropped, reopening that catalog slot.
+dropped, reopening that catalog slot. At full health, one through six guns give
+approximately 53%, 62%, 70%, 78%, 87%, and 95% chances of killing one officer
+in a fight round. Every catalog slot therefore improves the odds, but none makes
+a fight certain.

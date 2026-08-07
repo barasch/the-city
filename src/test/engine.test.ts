@@ -12,6 +12,7 @@ import {
   inventoryUnits,
   localServiceError,
   MAX_GUNS,
+  policeFightSuccessChance,
   PRODUCTS,
   startGame,
   storedUnits,
@@ -207,6 +208,13 @@ describe("deterministic game engine", () => {
     const refused = applyAction(full, { type: "buy-gun" });
     expect(refused.guns).toBe(MAX_GUNS);
     expect(refused.log[0]).toContain(`only ${MAX_GUNS} guns`);
+    const fightChances = GUN_CATALOG.map((_, index) =>
+      policeFightSuccessChance(index + 1, 100),
+    );
+    for (let index = 1; index < fightChances.length; index++)
+      expect(fightChances[index]).toBeGreaterThan(fightChances[index - 1]);
+    expect(fightChances[0]).toBeCloseTo(0.533);
+    expect(fightChances.at(-1)).toBeCloseTo(0.948);
     // The engine refuses a fight with zero guns even if a malformed encounter is supplied.
     const noGuns = {
       ...bought,
