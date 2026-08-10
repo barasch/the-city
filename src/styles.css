@@ -210,6 +210,51 @@ h3 {
 .start-card select {
   text-align: center;
 }
+.runner-name-control {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 2.5rem;
+  align-items: center;
+}
+.runner-name-control input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: bold;
+}
+.runner-name-control input:focus {
+  outline: 0;
+  box-shadow: inset 0 -1px var(--cyan);
+}
+.runner-name-control button {
+  min-height: 2.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+}
+.runner-name-control:hover button,
+.runner-name-control:focus-within button {
+  opacity: 1;
+}
+.home-borough-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+}
+.home-borough-control select {
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  color: #edfaff;
+}
 label {
   display: grid;
   gap: 0.35rem;
@@ -277,6 +322,13 @@ label {
 }
 .scores li strong {
   color: var(--cyan);
+}
+.scores li strong small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: normal;
+  text-transform: uppercase;
 }
 .topbar {
   display: flex;
@@ -581,6 +633,15 @@ td:first-child {
 .travel-buttons button {
   flex: 1 1 9rem;
 }
+.settle-panel {
+  margin-top: 0.4rem;
+}
+.settle-button {
+  width: 100%;
+  min-height: 64px;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
 .travel .panel-heading p {
   margin: 0.3rem 0 0;
 }
@@ -661,6 +722,58 @@ td:first-child {
   cursor: pointer;
   font-size: 0.7rem;
 }
+.price-matrix-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 0.8rem;
+}
+.price-matrix {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.61rem;
+}
+.price-matrix th,
+.price-matrix td {
+  padding: 0.48rem 0.55rem;
+  border-bottom: 1px solid #17384b;
+  text-align: right;
+  white-space: nowrap;
+}
+.price-matrix thead th {
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: normal;
+  text-transform: uppercase;
+}
+.price-matrix th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 9.5rem;
+  background: #091e2c;
+  text-align: left;
+}
+.price-matrix tbody th b,
+.price-matrix tbody th small,
+.price-matrix td b,
+.price-matrix td small {
+  display: block;
+}
+.price-matrix tbody th b {
+  color: #edfaff;
+}
+.price-matrix tbody th small,
+.price-matrix td small {
+  margin-top: 0.18rem;
+  color: var(--muted);
+  font-size: 0.54rem;
+  font-weight: normal;
+}
+.price-matrix td b {
+  color: var(--yellow);
+  font-weight: normal;
+}
 .ledger-boroughs {
   display: grid;
   gap: 0.75rem;
@@ -718,15 +831,6 @@ td:first-child {
   font-size: 0.68rem;
   line-height: 1.45;
 }
-.day-actions {
-  display: flex;
-  align-items: center;
-  justify-content: end;
-  gap: 0.8rem;
-  margin-top: 1.2rem;
-  font-size: 0.72rem;
-  color: var(--yellow);
-}
 .end {
   max-width: 650px;
   min-height: 80vh;
@@ -741,6 +845,13 @@ td:first-child {
   font-size: clamp(3rem, 12vw, 6rem);
   letter-spacing: -0.1em;
   margin: 1.5rem 0 0.5rem;
+}
+.final-score-label {
+  margin: 1.5rem 0 -1rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .final-grid {
   display: grid;
@@ -777,6 +888,7 @@ td:first-child {
 .encounter p:not(.eyebrow):not(.hint) {
   color: #bedbe4;
   line-height: 1.6;
+  white-space: pre-line;
 }
 .encounter-actions {
   display: flex;
@@ -860,6 +972,26 @@ td:first-child {
 .dialog-context {
   color: var(--yellow);
   font-size: 0.72rem;
+}
+.rate-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  margin: -0.35rem 0 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #17384b;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.loan-choices button span,
+.loan-choices button small {
+  display: block;
+}
+.loan-choices button small {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: normal;
 }
 .gun-catalog {
   display: grid;
@@ -1067,6 +1199,9 @@ td:first-child {
   }
 }
 @media (max-width: 560px) {
+  .runner-name-control button {
+    opacity: 1;
+  }
   .shell {
     padding: 1rem 0.75rem 3rem;
   }
@@ -1130,13 +1265,6 @@ td:first-child {
   }
   .borough:nth-child(n + 3) {
     border-top: 1px solid #17384b;
-  }
-  .day-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .day-actions button {
-    width: 100%;
   }
   .final-grid {
     grid-template-columns: 1fr;

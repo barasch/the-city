@@ -1,80 +1,177 @@
-# The City design notes
+# The City — version-two rules
 
-## Travel events
+This document is the rules contract for the deterministic browser game. Numeric
+constants are deliberately centralized in `src/game/engine.ts`; playtesting may
+change them without changing the state model.
 
-- Travel pauses for acknowledged event dialogs. The player taps or clicks
-  **Continue** before play resumes.
-- One mandatory, mechanically neutral event is exactly:
+## Run and settlement
 
-  > An old lady on the subway says, "Would you like a jelly, baby?"
+- A run lasts 30 game days. Travel, Lay low, clinic treatment, and plastic
+  surgery advance the clock.
+- On Day 30, **Settle up** replaces Travel and Lay low.
+- Final net worth is `cash + bank - debt`. Carried and stored stock is not
+  liquidated and contributes nothing unless the player sells it before
+  settlement.
+- Scores record runner name, real completion date, days survived, net worth,
+  home borough, and total police killed.
 
-- The first event set also includes menacing, strange, and useful signals. Some
-  foreshadow market events; others reflect current heat or loan-shark pressure.
-- Later passes should expand this set carefully and test event frequency,
-  mechanical effects, repetition, and tone rather than treating event volume as
-  an end in itself.
+## Identity and persistence
 
-## Borough identity
+- The device retains the last runner name separately from the active run. Blank
+  names normalize to `Runner`.
+- Version-two saves use schema version 2. Version-one active runs are invalidated
+  because storage, contacts, heat, and encounters now require incompatible
+  state. The old run's name and old scores survive.
 
-The bank and loan shark are available only in the chosen home borough. Fixed
-local services are:
+## Borough identities
 
-- Manhattan: a $25,000 plastic surgeon consumes five days and clears heat.
-- Brooklyn: $1,500 private treatment consumes one day and restores full health.
-- Queens: the coat factory sells $4,000 upgrades through capacities of 25, 50,
-  100, 150, and 200 spaces. New players begin with the 25-space coat.
-- The Bronx: its gun shop gives access to the six-model catalog.
-- Staten Island: a persistent storage unit can hold or return stock, and a fence
-  buys everything currently in the coat for 70% of that day's local prices,
-  including products absent from the market listing.
+| Borough       | Fixed services           | Structural market identity                                            |
+| ------------- | ------------------------ | --------------------------------------------------------------------- |
+| Manhattan     | Clinic; Plastic surgeon  | High prices; displayed heat counts double for police mechanics        |
+| Brooklyn      | Plastic surgeon; Storage | Nightlife demand, especially Molly                                    |
+| Queens        | Coat factory; Storage    | Import and logistics base; Coke and Heroin are reliably cheaper       |
+| The Bronx     | Guns; Clinic             | Broad wholesale bargains, especially Pills, Opioids, Speed, and Green |
+| Staten Island | Fence; Storage           | Sparse listings and scarcity premiums, especially Peyote and Shrooms  |
 
-The identities and tradeoffs are structural; names and numerical tuning remain
-provisional until repeated full-run playtests establish their actual value.
+Bank and Loan shark are added only in the chosen home borough. A developed
+contact is added by name to that contact's borough.
 
-## Market scale
+Product/borough multipliers create reliable interborough spreads. Daily noise
+and gluts or shortages move prices around those durable means. Markets impose no
+quantity-depth cap.
 
-- Normal prices span cheap entry products through cocaine around $20,000 and
-  heroin around $10,000. These premium products are usually out of reach on Day 1.
-- A local shipment can cut one product to 10–32% of its ordinary price; a
-  shortage can raise it to 2.8–6 times its ordinary price. Shocked products are
-  always listed, last two to four days, and are announced in a dialog and the
-  field notes.
-- Cocaine and heroin are capped at $100,000 per unit. A 200-space coat can
-  therefore gross $20 million on a perfect premium sale, preserving the classic
-  late-run scale without imposing market-depth limits.
-- Displayed net worth is cash plus bank balance minus debt. Unsold stock—whether
-  carried or stored—does not count until it is sold. Day 30 liquidates all
-  remaining stock at 72% before calculating the final score.
+## Coat and local storage
 
-## Heat
+The player starts with 10 spaces. Queens sells only the next coat:
 
-- Every market purchase and sale adds heat according to the logarithm of its
-  dollar value. Larger deals therefore matter substantially without making the
-  difference between $1 million and $2 million mechanically linear.
-- New heat is multiplied by a convex function of existing heat. Small-time
-  activity accumulates slowly; conspicuous dealing makes each further exposure
-  more costly. The composite exposure function has separate inputs for gun
-  purchases, failed escapes, police shootouts, and officers killed. A successful
-  fight round counts as both a shootout and one officer killed, so a multi-round
-  fight compounds rapidly.
-- Lay Low removes more heat when the starting level is low and progressively
-  less when it is high. Heat 35 clears in two days; heat 90 remains above zero
-  after five. Plastic surgery clears it completely in five days for $25,000.
-- Police risk is gated by a convex function of heat. At heat below 10, even the
-  worst route and cargo modifiers leave the per-trip encounter chance below 1%.
-  Route conditions, local enforcement, and cargo value modify the heat signal;
-  they do not create a large independent encounter floor.
-- Patrol size also follows heat. Heat 0–9 permits 1–2 officers and heat 10–19
-  permits 1–3. The range rises in steps until heat 100 permits 5–12 officers, so
-  a large chase reflects accumulated exposure rather than coat contents alone.
+| Capacity |  Price |
+| -------: | -----: |
+|       21 | $1,000 |
+|       34 | $2,000 |
+|       55 | $3,000 |
+|       89 | $5,000 |
 
-## Guns
+Brooklyn, Queens, and Staten Island offer separate physical storage units. Each
+unit:
 
-The catalog contains one each of Taurus G3C ($500), SIG Sauer P365 ($650), Glock
-19 ($800), Beretta 92FS ($950), Colt 1911 ($1,200), and Colt Python ($1,500).
-The player can carry all six but cannot buy duplicates. Fighting never consumes
-a gun; an unsuccessful or successful escape can cause one named gun to be
-dropped, reopening that catalog slot. At full health, one through six guns give
-approximately 53%, 62%, 70%, 78%, 87%, and 95% chances of killing one officer
-in a fight round. Every catalog slot therefore improves the odds, but none makes
-a fight certain.
+- holds 200 items;
+- costs $200 when rented and $200 on each subsequent game day;
+- remains rented until the player empties and closes it;
+- produces a voicemail when rent cannot be taken from cash;
+- gives one game day to cure the arrears; and
+- is forfeited, with no proceeds, if the next charge still cannot be paid.
+
+## Finance and the loan shark
+
+- The bank pays 0.5% daily.
+- The opening arrangement advances $5,000 and books $10,000 of debt.
+- Debt compounds at 6% daily. The current bank rate, debt, and vig are displayed
+  at their offices.
+- The first loan is protected through Day 5. A successful later loan grants five
+  days of grace counting the loan day.
+- Full repayment closes the account. A closed account unlocks a fixed new offer:
+  $25,000 cash for $40,000 booked debt.
+- Asking for more money while any debt remains is an allowed mistake. It advances
+  no cash and multiplies the current daily vig by 1.5. Repeated mistakes compound.
+- A partial payment can be any positive amount up to cash and debt. If cash
+  remains, there is a 50% chance the loan shark sees it. His men then inflict
+  10–30 health damage, take all remaining cash, and credit only the portion
+  needed against debt. Partial payment never raises the vig.
+- **I need more time** inflicts the same 10–30 office damage and takes all cash,
+  but credits none of it against debt. It does not raise the vig.
+
+After grace expires, an outstanding debt creates a travel check before the
+police check:
+
+| Exposure since current loan began | Other borough | Home borough |
+| --------------------------------- | ------------: | -----------: |
+| Ordinary                          |           10% |          25% |
+| Premium transaction               |           20% |          50% |
+
+A premium transaction means cumulative same-day volume above $100,000, or more
+than ten total units of Coke or Heroin. The flag persists until full repayment.
+An enforcer result suppresses the police result for that trip.
+
+Wild enforcers first present “Someone taps you on the shoulder...” After
+acknowledgement, they inflict 25–75 health damage and take all carried cash,
+stock, guns, and any upgraded coat. Capacity returns to 10; stored stock and
+bank balance remain; seized property is not credited toward debt. The result
+uses “f***ed you up.” A fatal result then presents “They wasted you!!!” as its
+own acknowledged step.
+
+## Trade heat and notoriety
+
+- Trade heat uses cumulative daily gross volume, so splitting a transaction does
+  not avoid thresholds.
+- Ordinary products add heat slowly on a logarithmic volume curve. Sufficient
+  ordinary volume still matters.
+- Once same-day Coke or Heroin volume crosses ten units, that product adds a
+  deterministic 30–50 heat. At 25 units or $500,000 gross value, heat becomes 100.
+- Buying a gun adds substantial heat. A failed Run, a shootout, and each police
+  kill add separate exposure.
+- Existing heat accelerates new exposure.
+- Each police kill since the last plastic surgery raises the heat floor by 12,
+  capped at 90. Lay low cannot cool below that visible floor.
+- Plastic surgery costs $200,000, takes three days, and resets current heat, the
+  floor, and the post-surgery kill count. Lifetime police kills remain in the
+  score.
+
+Manhattan keeps the displayed heat number but uses
+`min(100, displayed heat × 2)` for encounter probability, patrol size, and the
+search-versus-fire Give up branch.
+
+## Police encounters
+
+Heat gates both encounter probability and officer count. Below heat 10, even
+worst-case route and cargo modifiers leave encounter probability below about 1%,
+and patrols contain no more than two officers. Heat 15 permits at most three;
+heat 100 permits five to twelve.
+
+At each choice the player may:
+
+- **Run**. Success ends the chase and may drop a gun. Failure may drop stock and
+  a gun, then moves to police return fire.
+- **Fight**, shown only when armed. Every gun independently has a two-thirds
+  chance to kill one officer, so six guns can kill up to six officers in one
+  volley. Guns are not consumed. If officers remain, the player acknowledges the
+  result and then police return fire.
+- **Give up**. Below 33 effective heat, police detain the player and search the
+  coat. A player carrying neither stock nor guns is released; otherwise arrest
+  ends the run. At 33 or more effective heat, the player merely stands “looking
+  like an idiot” and police fire.
+
+Police return fire is a distinct acknowledged step. Hit probability rises with
+officers remaining and effective heat. A hit costs 10–30 health; survivors return
+to Run/Fight/Give up. A fatal hit is followed by “They wasted you!!!” and a
+**Game over** button.
+
+## Contacts, rumors, and field notes
+
+- The opening borough counts as one visit. Lay low and medical recovery do not
+  count as new visits.
+- On the third arrival, a borough creates a contact if fewer than three contacts
+  exist. Only the first three boroughs to reach three arrivals qualify.
+- Three unique contact names are selected deterministically for each run from a
+  shuffled, bundled pool of 1,200 names.
+- Hidden reliability values are 0.50, 0.95, and one uniform draw from 0.50–0.95,
+  randomly assigned to those three names.
+- Once per visit, the local contact supplies one to four forecasts about distinct
+  products in that borough, two days ahead. Reliability is the probability that
+  the forecasted direction is correct.
+- Anonymous rumors remain separate. They concern a non-premium product event on
+  the following day.
+- Forecasts and later correctness results enter one structured, global,
+  reverse-chronological Field notes sequence.
+- The observation view is one scrollable matrix: boroughs are rows, products are
+  columns, and each observed price carries its observation day. Each borough row
+  displays last visit and visit count.
+
+## Copy and dialog rules
+
+- Market-event narration uses the present tense.
+- Machine responses such as “Debt reduced” are replaced by loan-shark dialogue.
+- Successful market, bank, repayment, coat, clinic, fence, and storage actions
+  close their action dialog when no immediate follow-up choice remains. The gun
+  shop stays open after a purchase.
+- Multistep danger is never collapsed: player result, police fire, damage, and
+  fatality each appear in their proper sequence.

@@ -1,19 +1,25 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Action,
+  BANK_DAILY_RATE,
   BOROUGHS,
   BoroughId,
   boroughServiceNames,
   currentBorough,
   fenceValue,
-  FENCE_SERVICE,
   GameState,
   GUN_CATALOG,
   inventoryUnits,
   localServiceError,
   LOCAL_SERVICES,
   MAX_GUNS,
-  nextCoatCapacity,
+  nextCoatOffer,
+  REPEAT_LOAN_ADVANCE,
+  REPEAT_LOAN_DEBT,
+  STORAGE_CAPACITY,
+  STORAGE_DAILY_RENT,
+  isStorageBorough,
+  storageUnitAt,
   type LocalServiceOffer,
   ProductId,
   PRODUCTS,
@@ -24,9 +30,11 @@ import {
 } from "./game/engine";
 import {
   loadGame,
+  loadRunnerName,
   loadScores,
   SAVE_KEY,
   saveGame,
+  saveRunnerName,
   saveScore,
 } from "./game/storage";
 import { normalizeTradeQuantity } from "./game/tradeControls";
@@ -64,9 +72,8 @@ function Instructions({ onClose }: { onClose: () => void }) {
           <article>
             <h3>Thirty days</h3>
             <p>
-              Build net worth by trading across five boroughs. Remaining stock
-              counts only after you sell it; anything left is liquidated at a
-              discount after Day 30.
+              Build net worth by trading across five boroughs. Sell what you can
+              before settling on Day 30: unsold stock has no final value.
             </p>
           </article>
           <article>
@@ -88,27 +95,27 @@ function Instructions({ onClose }: { onClose: () => void }) {
             <h3>Home</h3>
             <p>
               The bank and loan shark operate only in your home borough. Guns
-              are sold in The Bronx. Your opening $5,000 comes with $10,000
-              debt.
+              are sold in The Bronx. Your opening $5,000 comes with $10,000 debt
+              and five days before collection pressure begins.
             </p>
           </article>
           <article>
             <h3>Risk</h3>
             <p>
               Heat drives both police risk and patrol size; routes, cargo, and
-              local enforcement modify the odds. Large trades build heat, and
-              existing heat accelerates the gain. Escape or fight through a
-              chase one round at a time. High debt can also bring the loan
-              shark's enforcers. Guns survive fights, but one can be lost during
-              an escape.
+              local enforcement modify the odds. Volume builds heat; large Coke
+              and Heroin trades build it abruptly. Each gun fires independently
+              in a fight. Police kills create a heat floor that only plastic
+              surgery removes. The loan shark's enforcers begin looking after
+              grace expires.
             </p>
           </article>
           <article>
             <h3>Lay low</h3>
             <p>
               Laying low restores health. Low heat disappears quickly; high heat
-              is stubborn. Markets have no quantity cap beyond cash, coat space,
-              and the day’s listings.
+              is stubborn and cannot fall below notoriety. Markets have no
+              quantity cap beyond cash, coat space, and the day’s listings.
             </p>
           </article>
         </div>
@@ -121,10 +128,11 @@ function Instructions({ onClose }: { onClose: () => void }) {
 }
 
 function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
-  const [name, setName] = useState("");
-  const [home, setHome] = useState<BoroughId>("brooklyn");
-  const [seed] = useState(() => Math.floor(Math.random() * 0xffffffff));
   const saved = loadGame();
+  const [name, setName] = useState(() => saved?.name ?? loadRunnerName());
+  const [home, setHome] = useState<BoroughId>("brooklyn");
+  const nameInput = useRef<HTMLInputElement>(null);
+  const [seed] = useState(() => Math.floor(Math.random() * 0xffffffff));
   const scores = loadScores();
   return (
     <main className="start shell">
@@ -133,17 +141,26 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
         <h1>THE CITY</h1>
       </div>
       <section className="start-card">
-        <label>
-          Runner name
+        <div className="runner-name-control">
           <input
+            ref={nameInput}
+            aria-label="Runner name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Choose a name"
+            onBlur={() => setName(saveRunnerName(name))}
+            placeholder="Runner"
             maxLength={24}
           />
-        </label>
-        <label>
-          Home borough
+          <button
+            type="button"
+            aria-label="Edit runner name"
+            onClick={() => nameInput.current?.focus()}
+          >
+            ✎
+          </button>
+        </div>
+        <label className="home-borough-control">
+          <span>Home borough</span>
           <select
             value={home}
             onChange={(e) => setHome(e.target.value as BoroughId)}
@@ -157,13 +174,17 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
         </label>
         <button
           className="primary big"
-          onClick={() => onStart(startGame(name, home, seed))}
+          onClick={() => {
+            const clean = saveRunnerName(name);
+            setName(clean);
+            onStart(startGame(clean, home, seed));
+          }}
         >
-          Start Day 1
+          Start
         </button>
         {saved && saved.phase !== "gameover" && (
           <button className="secondary big" onClick={() => onStart(saved)}>
-            Resume {saved.name} · Day {saved.day}
+            Resume
           </button>
         )}
       </section>
@@ -173,12 +194,18 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
           <p className="muted">No completed runs on this device yet.</p>
         ) : (
           <ol>
-            {scores.slice(0, 5).map((s) => (
-              <li key={`${s.date}-${s.value}`}>
-                <span>{s.name}</span>
-                <strong>{cash(s.value)}</strong>
+            {scores.slice(0, 5).map((s, index) => (
+              <li key={`${s.date}-${s.value}-${s.name}-${index}`}>
+                <span>
+                  <b>{s.name}</b>
+                  <small>{s.date}</small>
+                </span>
+                <strong>
+                  {cash(s.value)} <small>net worth</small>
+                </strong>
                 <small>
-                  Day {s.day} · {s.reason}
+                  {s.day} days · {s.home ? boroughName(s.home) : "Legacy run"} ·{" "}
+                  {s.officersKilled ?? 0} cops killed
                 </small>
               </li>
             ))}
@@ -449,20 +476,22 @@ function StorageDialog({
   act: (a: Action) => void;
   onClose: () => void;
 }) {
+  if (!isStorageBorough(state.current)) return null;
   const [mode, setMode] = useState<"store" | "retrieve" | null>(null);
   const [selected, setSelected] = useState<ProductId | null>(null);
   const [quantity, setQuantity] = useState(0);
-  const storage = state.storage;
+  const unit = storageUnitAt(state, state.current);
+  const storage = unit.inventory;
   const products = PRODUCTS.filter((item) =>
     mode === "store"
       ? state.inventory[item.id].quantity > 0
-      : (storage?.[item.id].quantity ?? 0) > 0,
+      : storage[item.id].quantity > 0,
   );
   const available = selected
     ? mode === "store"
       ? state.inventory[selected].quantity
       : Math.min(
-          storage?.[selected].quantity ?? 0,
+          storage[selected].quantity,
           state.capacity - inventoryUnits(state),
         )
     : 0;
@@ -489,8 +518,30 @@ function StorageDialog({
     onClose();
   };
   return (
-    <Dialog title="Storage unit" eyebrow="STATEN ISLAND" onClose={onClose}>
-      {!mode ? (
+    <Dialog title="Storage unit" onClose={onClose}>
+      {!unit.active ? (
+        <>
+          <p className="dialog-context">
+            A local unit holds {STORAGE_CAPACITY} items. Rent is{" "}
+            {cash(STORAGE_DAILY_RENT)} now and on each new game day.
+          </p>
+          <div className="dialog-actions">
+            <button
+              className="primary"
+              disabled={state.cash < STORAGE_DAILY_RENT}
+              onClick={() => {
+                act({ type: "rent-storage" });
+                onClose();
+              }}
+            >
+              Rent unit
+            </button>
+            <button className="text-button" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : !mode ? (
         <>
           <div className="dialog-facts storage-facts">
             <span>
@@ -501,7 +552,9 @@ function StorageDialog({
             </span>
             <span>
               Stored
-              <b>{storedUnits(state)}</b>
+              <b>
+                {storedUnits(state, state.current)} / {STORAGE_CAPACITY}
+              </b>
             </span>
           </div>
           <div className="choice-actions">
@@ -509,7 +562,7 @@ function StorageDialog({
               Store stock
             </button>
             <button
-              disabled={storedUnits(state) < 1}
+              disabled={storedUnits(state, state.current) < 1}
               onClick={() => setMode("retrieve")}
             >
               Retrieve stock
@@ -517,6 +570,17 @@ function StorageDialog({
             <button className="text-button" onClick={onClose}>
               Cancel
             </button>
+            {storedUnits(state, state.current) === 0 && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  act({ type: "close-storage" });
+                  onClose();
+                }}
+              >
+                Close unit
+              </button>
+            )}
           </div>
         </>
       ) : !selected ? (
@@ -537,7 +601,7 @@ function StorageDialog({
                   <b>
                     {mode === "store"
                       ? state.inventory[item.id].quantity
-                      : (storage?.[item.id].quantity ?? 0)}
+                      : storage[item.id].quantity}
                   </b>
                 </button>
               ))}
@@ -655,7 +719,10 @@ function Services({
     if (state.phase !== "market") close();
   }, [state.current, state.home, state.phase]);
   const isHome = state.current === state.home;
-  const localOffer = LOCAL_SERVICES[state.current];
+  const localOffers = LOCAL_SERVICES[state.current];
+  const contact = state.contacts.find(
+    (candidate) => candidate.borough === state.current,
+  );
   const localIssue = localService
     ? localServiceError(state, localService.id)
     : undefined;
@@ -677,53 +744,119 @@ function Services({
             <button onClick={() => open("loan")}>Visit loan shark</button>
           </>
         )}
-        <button
-          data-service-id={localOffer.id}
-          onClick={() => openLocalOffer(localOffer)}
-        >
-          {localOffer.label}
-        </button>
-        {state.current === "staten" && (
+        {localOffers.map((offer) => (
           <button
-            data-service-id={FENCE_SERVICE.id}
-            onClick={() => setLocalService(FENCE_SERVICE)}
+            key={offer.id}
+            data-service-id={offer.id}
+            onClick={() => openLocalOffer(offer)}
           >
-            {FENCE_SERVICE.label}
+            {offer.label}
+          </button>
+        ))}
+        {contact && (
+          <button onClick={() => act({ type: "consult-contact" })}>
+            Talk to {contact.name}
           </button>
         )}
       </div>
       {dialog && (
         <Dialog
-          title={dialog === "bank" ? "Bank" : "Loan shark"}
-          eyebrow={step === 1 ? "HOME SERVICE" : "SET AMOUNT"}
+          title={dialog === "bank" ? "BANK" : "LOAN SHARK"}
           onClose={close}
         >
+          <div className="rate-readout">
+            {dialog === "bank" ? (
+              <>
+                <span>Balance {cash(state.bank)}</span>
+                <span>
+                  Interest {(BANK_DAILY_RATE * 100).toFixed(1)}% daily
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Debt {cash(state.debt)}</span>
+                <span>Vig {(state.loanRate * 100).toFixed(1)}% daily</span>
+                {state.debt === 0 && (
+                  <span>
+                    New credit {cash(REPEAT_LOAN_ADVANCE)} cash /{" "}
+                    {cash(REPEAT_LOAN_DEBT)} debt
+                  </span>
+                )}
+              </>
+            )}
+          </div>
           {step === 1 ? (
-            <div className="choice-actions">
-              {dialog === "bank" ? (
-                <>
-                  <button className="primary" onClick={() => choose("deposit")}>
-                    Deposit
-                  </button>
-                  <button onClick={() => choose("withdraw")}>Withdraw</button>
-                </>
-              ) : (
-                <>
-                  <button className="primary" onClick={() => choose("borrow")}>
-                    Borrow
-                  </button>
-                  <button
-                    disabled={state.debt < 1}
-                    onClick={() => choose("repay")}
-                  >
-                    Repay
-                  </button>
-                </>
+            <>
+              {dialog === "loan" && (
+                <p className="dialog-context">
+                  The loan shark looks you over. “Whatchu got for me,{" "}
+                  {state.name}?”
+                </p>
               )}
-              <button className="text-button" onClick={close}>
-                Cancel
-              </button>
-            </div>
+              <div className="choice-actions loan-choices">
+                {dialog === "bank" ? (
+                  <>
+                    <button
+                      className="primary"
+                      onClick={() => choose("deposit")}
+                    >
+                      Deposit
+                    </button>
+                    <button onClick={() => choose("withdraw")}>Withdraw</button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="primary"
+                      disabled={state.debt < 1 || state.cash < state.debt}
+                      onClick={() => {
+                        act({ type: "repay", amount: state.debt });
+                        close();
+                      }}
+                    >
+                      <span>I got your money</span>
+                      <small>Full repayment</small>
+                    </button>
+                    <button
+                      disabled={state.debt < 1}
+                      onClick={() => choose("repay")}
+                    >
+                      <span>I have some of the money now</span>
+                      <small>Partial repayment</small>
+                    </button>
+                    <button
+                      onClick={() => {
+                        act({ type: "borrow", amount: REPEAT_LOAN_ADVANCE });
+                        close();
+                      }}
+                    >
+                      <span>I need more help</span>
+                      <small>Borrow</small>
+                    </button>
+                    {state.debt > 0 ? (
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          act({ type: "loan-more-time" });
+                          close();
+                        }}
+                      >
+                        I need more time
+                      </button>
+                    ) : (
+                      <button className="text-button" onClick={close}>
+                        Cancel
+                      </button>
+                    )}
+                  </>
+                )}
+                {dialog === "bank" && (
+                  <button className="text-button" onClick={close}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </>
           ) : (
             <>
               <p className="dialog-context">
@@ -731,8 +864,6 @@ function Services({
                   `Cash available: ${cash(state.cash)}`}
                 {serviceAction === "withdraw" &&
                   `Bank balance: ${cash(state.bank)}`}
-                {serviceAction === "borrow" &&
-                  `Credit remaining: ${cash(maxAmount)}`}
                 {serviceAction === "repay" &&
                   `Debt outstanding: ${cash(state.debt)}`}
               </p>
@@ -769,9 +900,7 @@ function Services({
                     ? "Deposit"
                     : serviceAction === "withdraw"
                       ? "Withdraw"
-                      : serviceAction === "borrow"
-                        ? "Borrow"
-                        : "Repay"}
+                      : "Repay"}
                 </button>
                 <button
                   className="mini"
@@ -798,7 +927,7 @@ function Services({
         </Dialog>
       )}
       {gunDialog && (
-        <Dialog title="Buy a gun" eyebrow="LOCAL SERVICE" onClose={close}>
+        <Dialog title="Buy a gun" onClose={close}>
           <p className="dialog-context">
             {state.guns} / {MAX_GUNS} guns
           </p>
@@ -818,7 +947,6 @@ function Services({
                     disabled={owned || full || short}
                     onClick={() => {
                       act({ type: "buy-gun", gun: gun.id });
-                      close();
                     }}
                   >
                     {owned
@@ -844,15 +972,10 @@ function Services({
         <StorageDialog state={state} act={act} onClose={close} />
       )}
       {localService && (
-        <Dialog
-          title={localService.title}
-          eyebrow="LOCAL SERVICE"
-          onClose={close}
-        >
+        <Dialog title={localService.title} onClose={close}>
           <p className="dialog-context">
-            {localService.id === "coat-maker" &&
-            nextCoatCapacity(state.capacity)
-              ? `A ${nextCoatCapacity(state.capacity)}-space coat costs ${cash(localService.cost)}.`
+            {localService.id === "coat-maker" && nextCoatOffer(state.capacity)
+              ? `A ${nextCoatOffer(state.capacity)?.capacity}-space coat costs ${cash(nextCoatOffer(state.capacity)?.price ?? 0)}.`
               : localService.description}
             {localService.id === "fence" &&
               ` Today's offer is ${cash(fenceValue(state))}.`}
@@ -863,12 +986,12 @@ function Services({
               className="primary"
               disabled={Boolean(localIssue)}
               onClick={() => {
-                act({
-                  type:
-                    localService.id === "fence"
-                      ? "use-fence"
-                      : "use-local-service",
-                });
+                if (localService.id === "fence") act({ type: "use-fence" });
+                else
+                  act({
+                    type: "use-local-service",
+                    service: localService.id,
+                  });
                 close();
               }}
             >
@@ -887,9 +1010,6 @@ function Services({
 function Coat({ state }: { state: GameState }) {
   const [expanded, setExpanded] = useState(true);
   const carried = PRODUCTS.filter((p) => state.inventory[p.id].quantity > 0);
-  const weapons = weaponIds(state)
-    .map((id) => GUN_CATALOG.find((gun) => gun.id === id))
-    .filter((gun): gun is (typeof GUN_CATALOG)[number] => Boolean(gun));
   return (
     <section className="panel inventory-panel">
       <SectionToggle
@@ -901,18 +1021,8 @@ function Coat({ state }: { state: GameState }) {
       />
       {expanded && (
         <div id="coat-content" className="section-content">
-          {weapons.length > 0 && (
-            <div className="weapon-list">
-              <span className="weapon-list-label">Guns</span>
-              {weapons.map((gun) => (
-                <span className="weapon-chip" key={gun.id}>
-                  {gun.name}
-                </span>
-              ))}
-            </div>
-          )}
-          {carried.length === 0 && weapons.length === 0 ? (
-            <p className="empty-inventory">Nothing carried yet.</p>
+          {carried.length === 0 ? (
+            <p className="empty-inventory">No stock carried.</p>
           ) : carried.length > 0 ? (
             <div className="inventory-list">
               {carried.map((p) => {
@@ -949,6 +1059,17 @@ function Travel({
     act({ type: "travel", destination });
     close();
   };
+  if (state.day === 30)
+    return (
+      <section className="panel travel settle-panel">
+        <button
+          className="primary big settle-button"
+          onClick={() => act({ type: "finish-day" })}
+        >
+          Settle up
+        </button>
+      </section>
+    );
   return (
     <section className="panel travel">
       <div className="travel-buttons">
@@ -987,7 +1108,9 @@ function Travel({
                     )}
                   </span>
                   <small>
-                    {boroughServiceNames(b.id, state.home).join(" · ")}
+                    {boroughServiceNames(b.id, state.home, state.contacts).join(
+                      " · ",
+                    )}
                   </small>
                 </button>
               );
@@ -1007,14 +1130,14 @@ function Travel({
 function Ledger({ state }: { state: GameState }) {
   const [expanded, setExpanded] = useState(false);
   const here = currentBorough(state);
-  const familiarity =
-    here.familiarity >= 5
-      ? "Your contact here is reliable and knows the local pattern."
-      : here.familiarity >= 3
-        ? "A local contact is starting to share useful reports."
-        : here.familiarity === 2
-          ? "You are becoming a familiar face."
-          : "First impressions are all you have.";
+  const contact = state.contacts.find(
+    (candidate) => candidate.borough === state.current,
+  );
+  const familiarity = contact
+    ? `${contact.name} is your contact here.`
+    : here.ledger.visits >= 2
+      ? "You are becoming a familiar face."
+      : "First impressions are all you have.";
   return (
     <aside className="panel journal">
       <SectionToggle
@@ -1027,56 +1150,62 @@ function Ledger({ state }: { state: GameState }) {
         <div id="field-notes-content" className="section-content">
           <p className="familiarity">{familiarity}</p>
           <div className="field-note-list">
-            {BOROUGHS.flatMap((b) =>
-              state.boroughs[b.id].ledger.notes.map((note, i) => (
-                <p key={`${b.id}-${i}-${note}`}>
-                  <b>{b.name}</b> {note}
-                </p>
-              )),
-            )}
-            {BOROUGHS.every(
-              (b) => state.boroughs[b.id].ledger.notes.length === 0,
-            ) && (
+            {state.fieldNotes.map((note) => (
+              <p key={note.id}>
+                <b>Day {note.day}</b> {note.message}
+              </p>
+            ))}
+            {state.fieldNotes.length === 0 && (
               <p className="muted">No notes yet. Travel and pay attention.</p>
             )}
           </div>
           <details className="ledger-details">
             <summary>All borough observations</summary>
-            <div className="ledger-boroughs">
-              {BOROUGHS.map((b) => {
-                const entry = state.boroughs[b.id].ledger;
-                const observations = Object.entries(entry.observations).sort(
-                  ([, a], [, z]) => z.day - a.day,
-                );
-                return (
-                  <article key={b.id}>
-                    <h4>{b.name}</h4>
-                    <p>
-                      {entry.lastVisitDay
-                        ? `Last seen Day ${entry.lastVisitDay} · ${entry.visits} visit${entry.visits === 1 ? "" : "s"}`
-                        : "Not yet visited"}
-                    </p>
-                    {observations.length > 0 && (
-                      <div className="ledger-prices">
-                        {observations.map(([id, seen]) => (
-                          <span key={id}>
-                            <b>{PRODUCTS.find((p) => p.id === id)?.name}</b>
-                            {cash(seen.price)} <i>D{seen.day}</i>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
+            <div className="price-matrix-wrap">
+              <table className="price-matrix">
+                <thead>
+                  <tr>
+                    <th>Borough</th>
+                    {PRODUCTS.map((product) => (
+                      <th key={product.id}>{product.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {BOROUGHS.map((borough) => {
+                    const entry = state.boroughs[borough.id].ledger;
+                    return (
+                      <tr key={borough.id}>
+                        <th>
+                          <b>{borough.name}</b>
+                          <small>
+                            {entry.lastVisitDay
+                              ? `D${entry.lastVisitDay} · ${entry.visits} visit${entry.visits === 1 ? "" : "s"}`
+                              : "Not visited"}
+                          </small>
+                        </th>
+                        {PRODUCTS.map((product) => {
+                          const seen = entry.observations[product.id];
+                          return (
+                            <td key={product.id}>
+                              {seen ? (
+                                <>
+                                  <b>{cash(seen.price)}</b>
+                                  <small>D{seen.day}</small>
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </details>
-          <h4 className="recent-heading">Recent events</h4>
-          <ul>
-            {state.log.map((line, i) => (
-              <li key={`${line}-${i}`}>{line}</li>
-            ))}
-          </ul>
         </div>
       )}
     </aside>
@@ -1123,7 +1252,13 @@ function Encounter({
       <div className="encounter-backdrop">
         <section className="encounter" role="dialog" aria-modal="true">
           <p className="eyebrow">
-            {outcome.kind === "police" ? "POLICE ENCOUNTER" : "LOAN SHARK"}
+            {outcome.kind === "police"
+              ? "POLICE ENCOUNTER"
+              : outcome.kind === "contact"
+                ? "CONTACT"
+                : outcome.kind === "storage"
+                  ? "STORAGE"
+                  : "LOAN SHARK"}
           </p>
           <h2>{outcome.title}</h2>
           <p>{outcome.message}</p>
@@ -1132,7 +1267,7 @@ function Encounter({
               className="primary"
               onClick={() => act({ type: "continue" })}
             >
-              Continue
+              {outcome.buttonLabel ?? "Continue"}
             </button>
           </div>
         </section>
@@ -1145,7 +1280,6 @@ function Encounter({
         <section className="encounter" role="dialog" aria-modal="true">
           <p className="eyebrow">LOAN SHARK</p>
           <h2>Someone taps you on the shoulder...</h2>
-          <p>The loan shark's enforcers found you.</p>
           <div className="encounter-actions">
             <button
               className="primary"
@@ -1160,11 +1294,32 @@ function Encounter({
   }
   if (state.phase !== "encounter") return null;
   const officers = Math.max(1, state.pendingEncounter?.officers ?? 1);
+  if (state.pendingEncounter?.stage === "police-fire")
+    return (
+      <div className="encounter-backdrop">
+        <section className="encounter" role="dialog" aria-modal="true">
+          <p className="eyebrow">POLICE ENCOUNTER</p>
+          <h2>They're firing at you!</h2>
+          <p>
+            {officers} {officers === 1 ? "officer is" : "officers are"} still in
+            the chase.
+          </p>
+          <div className="encounter-actions">
+            <button
+              className="primary"
+              onClick={() => act({ type: "resolve-police-fire" })}
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      </div>
+    );
   return (
     <div className="encounter-backdrop">
       <section className="encounter" role="dialog" aria-modal="true">
         <p className="eyebrow">POLICE ENCOUNTER</p>
-        <h2>They want to search your coat.</h2>
+        <h2>The police are on you.</h2>
         <p>
           {officers} {officers === 1 ? "officer is" : "officers are"} chasing
           you. You have {state.guns} gun{state.guns === 1 ? "" : "s"} and{" "}
@@ -1175,14 +1330,24 @@ function Encounter({
             className="primary"
             onClick={() => act({ type: "resolve-encounter", choice: "escape" })}
           >
-            E — Try to escape
+            R — Run
           </button>
+          {state.guns > 0 && (
+            <button
+              className="danger"
+              onClick={() =>
+                act({ type: "resolve-encounter", choice: "fight" })
+              }
+            >
+              F — Fight
+            </button>
+          )}
           <button
-            className="danger"
-            disabled={state.guns < 1}
-            onClick={() => act({ type: "resolve-encounter", choice: "fight" })}
+            onClick={() =>
+              act({ type: "resolve-encounter", choice: "give-up" })
+            }
           >
-            F — Fight{state.guns < 1 ? " (no guns)" : ""}
+            G — Give up
           </button>
         </div>
       </section>
@@ -1224,35 +1389,36 @@ function Game({
         act({ type: "continue" });
       else if (state.phase === "loan-shark" && event.key === "Enter")
         act({ type: "resolve-loan-shark" });
-      else if (state.phase === "encounter" && event.key.toLowerCase() === "e")
+      else if (
+        state.phase === "encounter" &&
+        state.pendingEncounter?.stage === "police-fire" &&
+        event.key === "Enter"
+      )
+        act({ type: "resolve-police-fire" });
+      else if (state.phase === "encounter" && event.key.toLowerCase() === "r")
         act({ type: "resolve-encounter", choice: "escape" });
       else if (state.phase === "encounter" && event.key.toLowerCase() === "f")
         act({ type: "resolve-encounter", choice: "fight" });
+      else if (state.phase === "encounter" && event.key.toLowerCase() === "g")
+        act({ type: "resolve-encounter", choice: "give-up" });
       else if (state.phase === "market" && event.key.toLowerCase() === "l")
         act({ type: "lay-low" });
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [state.phase, instructionsOpen]);
+  }, [state.phase, state.pendingEncounter?.stage, instructionsOpen]);
   const net = state.cash + state.bank - state.debt;
   if (state.phase === "gameover")
     return (
       <main className="shell end">
-        <p className="eyebrow">Run complete</p>
-        <h1>
-          {state.score && state.score.value >= 0
-            ? "You made it."
-            : "The city won this round."}
-        </h1>
+        <h1>GAME OVER</h1>
+        <p className="final-score-label">Net Worth</p>
         <div className="final-score">{cash(state.score?.value ?? net)}</div>
-        <p>{state.score?.reason}</p>
         <div className="final-grid">
           <Stat label="Days" value={`${state.day} / 30`} />
-          <Stat label="Cash + bank" value={cash(state.cash + state.bank)} />
-          {state.debt > 0 && <Stat label="Debt" value={cash(state.debt)} />}
         </div>
         <button className="primary big" onClick={onNew}>
-          Start another run
+          Back to Start
         </button>
       </main>
     );
@@ -1297,7 +1463,11 @@ function Game({
         />
         <Stat
           label="Heat"
-          value={`${state.heat}%`}
+          value={
+            state.heatFloor > 0
+              ? `${state.heat}% · floor ${state.heatFloor}%`
+              : `${state.heat}%`
+          }
           tone={state.heat > 60 ? "danger-text" : ""}
         />
         <Stat label="Guns" value={`${state.guns}`} />
@@ -1307,16 +1477,6 @@ function Game({
       <Services state={state} act={act} />
       <Travel state={state} act={act} />
       <Ledger state={state} />
-      {state.day === 30 && (
-        <div className="day-actions">
-          <button
-            className="primary"
-            onClick={() => act({ type: "finish-day" })}
-          >
-            Settle Day 30
-          </button>
-        </div>
-      )}
       <Encounter state={state} act={act} />
     </main>
   );

@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Score, startGame } from "../game/engine";
 import {
   loadGame,
+  loadRunnerName,
   loadScores,
+  RUNNER_NAME_KEY,
   SAVE_KEY,
   saveGame,
+  saveRunnerName,
   saveScore,
 } from "../game/storage";
 
@@ -57,6 +60,24 @@ describe("local persistence", () => {
     expect(loadGame()).toBeNull();
   });
 
+  it("invalidates version-one runs while retaining their runner name", () => {
+    localStorage.setItem(
+      SAVE_KEY,
+      JSON.stringify({ version: 1, name: "Old Runner" }),
+    );
+    expect(loadGame()).toBeNull();
+    expect(localStorage.getItem(SAVE_KEY)).toBeNull();
+    expect(loadRunnerName()).toBe("Old Runner");
+    expect(localStorage.getItem(RUNNER_NAME_KEY)).toBe("Old Runner");
+  });
+
+  it("normalizes and retains the runner name independently", () => {
+    expect(loadRunnerName()).toBe("Runner");
+    expect(saveRunnerName("  Bell  ")).toBe("Bell");
+    expect(loadRunnerName()).toBe("Bell");
+    expect(saveRunnerName("   ")).toBe("Runner");
+  });
+
   it("sorts personal scores and keeps the best twenty", () => {
     for (let value = 1; value <= 25; value++) {
       const score: Score = {
@@ -65,6 +86,8 @@ describe("local persistence", () => {
         day: 30,
         reason: "Thirty days complete.",
         date: `Run ${value}`,
+        home: "brooklyn",
+        officersKilled: value,
       };
       saveScore(score);
     }

@@ -1,4 +1,4 @@
-import { LOAN_SHARK_CREDIT_LIMIT } from "./engine";
+import { REPEAT_LOAN_ADVANCE } from "./engine";
 
 export type ServiceAction = "deposit" | "withdraw" | "borrow" | "repay";
 
@@ -18,9 +18,9 @@ export function maximumServiceAmount(
     case "withdraw":
       return Math.max(0, Math.floor(balances.bank));
     case "borrow":
-      return Math.max(0, Math.floor(LOAN_SHARK_CREDIT_LIMIT - balances.debt));
+      return REPEAT_LOAN_ADVANCE;
     case "repay":
-      return Math.max(0, Math.floor(balances.debt));
+      return Math.max(0, Math.floor(Math.min(balances.debt, balances.cash)));
   }
 }
 
@@ -39,12 +39,7 @@ export function serviceAmountError(
     return "You do not owe that much.";
   if (action === "repay" && whole > balances.cash)
     return "The loan shark wants cash you actually have.";
-  if (action === "borrow") {
-    const available = maximumServiceAmount(action, balances);
-    if (whole > available)
-      return available > 0
-        ? `The loan shark taps the ledger. Only $${available.toLocaleString()} is available.`
-        : `The loan shark laughs. Get the debt below $${LOAN_SHARK_CREDIT_LIMIT.toLocaleString()} before asking again.`;
-  }
+  // Asking to borrow while debt remains is deliberately allowed. The loan
+  // shark punishes the mistake in dialogue and raises the vig.
   return undefined;
 }

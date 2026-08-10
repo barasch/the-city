@@ -10,15 +10,12 @@ describe("service amount controls", () => {
   it("sets action-specific maximums", () => {
     expect(maximumServiceAmount("deposit", balances)).toBe(3200);
     expect(maximumServiceAmount("withdraw", balances)).toBe(1400);
-    expect(maximumServiceAmount("borrow", balances)).toBe(900);
-    expect(maximumServiceAmount("repay", balances)).toBe(4100);
+    expect(maximumServiceAmount("borrow", balances)).toBe(25000);
+    expect(maximumServiceAmount("repay", balances)).toBe(3200);
   });
 
   it("explains unavailable credit and impossible transfers", () => {
-    expect(serviceAmountError("borrow", 901, balances)).toContain("Only $900");
-    expect(
-      serviceAmountError("borrow", 1, { ...balances, debt: 10000 }),
-    ).toContain("Get the debt below $5,000");
+    expect(serviceAmountError("borrow", 25000, balances)).toBeUndefined();
     expect(serviceAmountError("repay", 4100, balances)).toContain(
       "cash you actually have",
     );

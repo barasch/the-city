@@ -2,7 +2,7 @@
   "name": "the-city",
   "description": "A deterministic 30-day trading game set across New York City's five boroughs.",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
