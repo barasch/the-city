@@ -44,7 +44,11 @@ import {
   type ServiceAction,
 } from "./game/serviceControls";
 
-const cash = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const cash = (n: number) => {
+  const rounded = Math.round(n);
+  const amount = Math.abs(rounded).toLocaleString();
+  return rounded < 0 ? `-$${amount}` : `$${amount}`;
+};
 const BRAND_MARK = "./sb-a1.png";
 const boroughName = (id: BoroughId) =>
   BOROUGHS.find((b) => b.id === id)?.name ?? id;
@@ -136,58 +140,62 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
   const scores = loadScores();
   return (
     <main className="start shell">
-      <div className="brand-title">
-        <img src={BRAND_MARK} alt="" />
-        <h1>THE CITY</h1>
-      </div>
-      <section className="start-card">
-        <div className="runner-name-control">
-          <input
-            ref={nameInput}
-            aria-label="Runner name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => setName(saveRunnerName(name))}
-            placeholder="Runner"
-            maxLength={24}
-          />
-          <button
-            type="button"
-            aria-label="Edit runner name"
-            onClick={() => nameInput.current?.focus()}
-          >
-            ✎
-          </button>
+      <div className="start-hero">
+        <div className="brand-title">
+          <img src={BRAND_MARK} alt="" />
+          <h1>THE CITY</h1>
         </div>
-        <label className="home-borough-control">
-          <span>Home borough</span>
-          <select
-            value={home}
-            onChange={(e) => setHome(e.target.value as BoroughId)}
-          >
-            {BOROUGHS.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="primary big"
-          onClick={() => {
-            const clean = saveRunnerName(name);
-            setName(clean);
-            onStart(startGame(clean, home, seed));
-          }}
-        >
-          Start
-        </button>
-        {saved && saved.phase !== "gameover" && (
-          <button className="secondary big" onClick={() => onStart(saved)}>
-            Resume
-          </button>
-        )}
-      </section>
+        <section className="start-card">
+          <div className="runner-name-control">
+            <input
+              ref={nameInput}
+              aria-label="Runner name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => setName(saveRunnerName(name))}
+              placeholder="Runner"
+              maxLength={24}
+            />
+            <button
+              type="button"
+              aria-label="Edit runner name"
+              onClick={() => nameInput.current?.focus()}
+            >
+              ✎
+            </button>
+          </div>
+          <label className="home-borough-control">
+            <span>Home borough</span>
+            <select
+              value={home}
+              onChange={(e) => setHome(e.target.value as BoroughId)}
+            >
+              {BOROUGHS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="start-actions">
+            <button
+              className="primary big"
+              onClick={() => {
+                const clean = saveRunnerName(name);
+                setName(clean);
+                onStart(startGame(clean, home, seed));
+              }}
+            >
+              Start
+            </button>
+            {saved && saved.phase !== "gameover" && (
+              <button className="secondary big" onClick={() => onStart(saved)}>
+                Resume
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
       <section className="scores">
         <h2>Personal scores</h2>
         {scores.length === 0 ? (
@@ -196,14 +204,15 @@ function StartScreen({ onStart }: { onStart: (state: GameState) => void }) {
           <ol>
             {scores.slice(0, 5).map((s, index) => (
               <li key={`${s.date}-${s.value}-${s.name}-${index}`}>
-                <span>
+                <span className="score-identity">
                   <b>{s.name}</b>
                   <small>{s.date}</small>
                 </span>
-                <strong>
-                  {cash(s.value)} <small>net worth</small>
-                </strong>
-                <small>
+                <span className="score-value">
+                  <strong>{cash(s.value)}</strong>
+                  <small>Net worth</small>
+                </span>
+                <small className="score-meta">
                   {s.day} days · {s.home ? boroughName(s.home) : "Legacy run"} ·{" "}
                   {s.officersKilled ?? 0} cops killed
                 </small>
@@ -365,7 +374,7 @@ function Market({
       {expanded && (
         <div id="market-board-content" className="section-content">
           <div className="table-wrap">
-            <table>
+            <table className="market-table">
               <thead>
                 <tr>
                   <th>Product</th>
@@ -1472,11 +1481,17 @@ function Game({
         />
         <Stat label="Guns" value={`${state.guns}`} />
       </section>
-      <Coat state={state} />
-      <Market state={state} act={act} />
-      <Services state={state} act={act} />
-      <Travel state={state} act={act} />
-      <Ledger state={state} />
+      <div className="game-layout">
+        <div className="trading-column">
+          <Coat state={state} />
+          <Market state={state} act={act} />
+        </div>
+        <div className="action-column">
+          <Services state={state} act={act} />
+          <Travel state={state} act={act} />
+          <Ledger state={state} />
+        </div>
+      </div>
       <Encounter state={state} act={act} />
     </main>
   );
