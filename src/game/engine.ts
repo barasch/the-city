@@ -4,88 +4,88 @@ import FIRST_NAMES from "./firstNames.json";
 
 export const PRODUCTS = [
   {
-    id: "green",
-    name: "Green",
-    role: "staple",
-    base: 400,
-    color: "#9be564",
-  },
-  {
-    id: "acid",
-    name: "Acid",
-    role: "event-sensitive",
-    base: 2500,
-    color: "#d6b3ff",
-  },
-  {
-    id: "shrooms",
-    name: "Shrooms",
-    role: "event-sensitive",
-    base: 950,
-    color: "#f0c88a",
+    id: "pills",
+    name: "Pills",
+    role: "prescription",
+    base: 95,
+    color: "#87d9ff",
   },
   {
     id: "speed",
     name: "Speed",
     role: "steady middle",
-    base: 180,
+    base: 189,
     color: "#ffca69",
+  },
+  {
+    id: "green",
+    name: "Green",
+    role: "staple",
+    base: 971,
+    color: "#9be564",
+  },
+  {
+    id: "peyote",
+    name: "Peyote",
+    role: "scarcity",
+    base: 796,
+    color: "#c8f5a3",
+  },
+  {
+    id: "hash",
+    name: "Hash",
+    role: "staple",
+    base: 1920,
+    color: "#b4d18e",
+  },
+  {
+    id: "shrooms",
+    name: "Shrooms",
+    role: "event-sensitive",
+    base: 2545,
+    color: "#f0c88a",
+  },
+  {
+    id: "meth",
+    name: "Meth",
+    role: "volatile",
+    base: 4204,
+    color: "#e9f27b",
+  },
+  {
+    id: "opioids",
+    name: "Opioids",
+    role: "prescription",
+    base: 8236,
+    color: "#a9b7ff",
+  },
+  {
+    id: "acid",
+    name: "Acid",
+    role: "event-sensitive",
+    base: 12503,
+    color: "#d6b3ff",
   },
   {
     id: "molly",
     name: "Molly",
     role: "nightlife",
-    base: 3500,
+    base: 18746,
     color: "#ff91c8",
   },
   {
     id: "coke",
     name: "Coke",
     role: "import premium",
-    base: 20000,
+    base: 30858,
     color: "#dfe8ef",
   },
   {
     id: "heroin",
     name: "Heroin",
     role: "scarce opioid",
-    base: 10000,
+    base: 49307,
     color: "#ff8d8d",
-  },
-  {
-    id: "pills",
-    name: "Pills",
-    role: "prescription",
-    base: 75,
-    color: "#87d9ff",
-  },
-  {
-    id: "meth",
-    name: "Meth",
-    role: "volatile",
-    base: 1800,
-    color: "#e9f27b",
-  },
-  {
-    id: "hash",
-    name: "Hash",
-    role: "staple",
-    base: 750,
-    color: "#b4d18e",
-  },
-  {
-    id: "opioids",
-    name: "Opioids",
-    role: "prescription",
-    base: 1200,
-    color: "#a9b7ff",
-  },
-  {
-    id: "peyote",
-    name: "Peyote",
-    role: "scarcity",
-    base: 500,
-    color: "#c8f5a3",
   },
 ] as const;
 
@@ -139,17 +139,34 @@ export interface LocalServiceOffer {
   days: number;
 }
 export const GUN_CATALOG = [
-  { id: "taurus-g3c", name: "Taurus G3C", price: 500 },
-  { id: "sig-p365", name: "SIG Sauer P365", price: 650 },
-  { id: "glock-19", name: "Glock 19", price: 800 },
-  { id: "beretta-92fs", name: "Beretta 92FS", price: 950 },
-  { id: "colt-1911", name: "Colt 1911", price: 1200 },
-  { id: "colt-python", name: "Colt Python", price: 1500 },
+  { id: "taurus-g3c", name: "Taurus G3C", price: 500, quality: 0.44 / 0.95 },
+  {
+    id: "sig-p365",
+    name: "SIG Sauer P365",
+    price: 650,
+    quality: 0.51 / 0.95,
+  },
+  { id: "glock-19", name: "Glock 19", price: 800, quality: 0.58 / 0.95 },
+  {
+    id: "beretta-92fs",
+    name: "Beretta 92FS",
+    price: 950,
+    quality: 0.66 / 0.95,
+  },
+  { id: "colt-1911", name: "Colt 1911", price: 1200, quality: 0.73 / 0.95 },
+  { id: "colt-python", name: "Colt Python", price: 1500, quality: 1 },
 ] as const;
 export type GunId = (typeof GUN_CATALOG)[number]["id"];
 export type GunDefinition = (typeof GUN_CATALOG)[number];
-export const MAX_GUNS = GUN_CATALOG.length;
-export const POLICE_GUN_KILL_CHANCE = 2 / 3;
+export const MAX_GUNS = 2;
+export const MAX_GUNS_FIRED = 2;
+export const POLICE_GUN_KILL_CHANCE = 0.95;
+export const POLICE_OFFICER_HIT_CHANCE = 0.3;
+
+export function gunKillChance(id: GunId): number {
+  const gun = GUN_CATALOG.find((candidate) => candidate.id === id);
+  return Math.min(1, POLICE_GUN_KILL_CHANCE * (gun?.quality ?? 0));
+}
 export const COAT_OFFERS = [
   { capacity: 21, price: 1000 },
   { capacity: 34, price: 2000 },
@@ -187,7 +204,7 @@ const PLASTIC_SURGEON_SERVICE: LocalServiceOffer = {
   label: "Visit plastic surgeon",
   title: "A new face",
   description:
-    "A new face costs $200,000 and takes three days. Your heat and notoriety will fall to zero.",
+    "A new face costs $200,000 and takes three days. Your heat and accumulated exposure will fall to zero.",
   confirmLabel: "Proceed",
   cost: 200000,
   days: 3,
@@ -207,7 +224,7 @@ const GUN_SERVICE: LocalServiceOffer = {
   directoryName: "Guns",
   label: "Visit gun shop",
   title: "Gun shop",
-  description: "Six models are available, while you have room to carry one.",
+  description: "Six models are available. You may carry two guns.",
   confirmLabel: "Choose a gun",
   cost: 0,
   days: 0,
@@ -217,7 +234,8 @@ const STORAGE_SERVICE: LocalServiceOffer = {
   directoryName: "Storage",
   label: "Visit storage unit",
   title: "Storage unit",
-  description: "A local unit holds 200 items and costs $200 for each game day.",
+  description:
+    "Each unit holds 200 units of one product and costs $200 per game day. Rent up to three units at each storage location.",
   confirmLabel: "Manage storage",
   cost: 0,
   days: 0,
@@ -228,8 +246,8 @@ export const FENCE_SERVICE: LocalServiceOffer = {
   label: "Visit fence",
   title: "No questions asked",
   description:
-    "The fence will buy everything in your coat at a discount, including products not listed here today.",
-  confirmLabel: "Sell everything",
+    "The fence will buy your coat inventory or one complete storage unit at a steep discount.",
+  confirmLabel: "Choose inventory",
   cost: 0,
   days: 0,
 };
@@ -363,21 +381,30 @@ export interface Score {
 }
 export type StorageBoroughId = "brooklyn" | "queens" | "staten";
 export interface StorageUnit {
-  active: boolean;
-  inventory: Inventory;
+  slot: number;
+  productId?: ProductId;
+  quantity: number;
+  avgCost: number;
+}
+export interface StorageLocation {
+  units: StorageUnit[];
   lateSinceDay?: number;
 }
-export type StorageUnits = Record<StorageBoroughId, StorageUnit>;
+export type StorageUnits = Record<StorageBoroughId, StorageLocation>;
+export type StorageSource = {
+  borough: StorageBoroughId;
+  unit: number;
+};
+export type FenceSource = "coat" | StorageSource;
 export interface DailyTradeLedger {
   day: number;
   grossValue: number;
   grossByProduct: Record<ProductId, number>;
   rawExposureApplied: number;
   quantityByProduct: Record<ProductId, number>;
-  premiumTierByProduct: Partial<Record<ProductId, 1 | 2>>;
 }
 export interface GameState {
-  version: 2;
+  version: 3;
   seed: number;
   rng: number;
   name: string;
@@ -389,9 +416,10 @@ export interface GameState {
   debt: number;
   health: number;
   heat: number;
-  heatFloor: number;
+  heatExposure: number;
+  lastHeatIncreaseDay: number;
   officersKilled: number;
-  notorietyKills: number;
+  identityKills: number;
   guns: number;
   weapons: GunId[];
   capacity: number;
@@ -442,19 +470,32 @@ export function weaponIds(state: GameState): GunId[] {
 
 export type Action =
   | { type: "buy"; product: ProductId; quantity: number }
+  | {
+      type: "buy-storage";
+      borough: StorageBoroughId;
+      unit: number;
+      product: ProductId;
+      quantity: number;
+    }
   | { type: "sell"; product: ProductId; quantity: number }
-  | { type: "store"; product: ProductId; quantity: number }
-  | { type: "retrieve"; product: ProductId; quantity: number }
+  | {
+      type: "sell-storage";
+      borough: StorageBoroughId;
+      unit: number;
+    }
+  | { type: "store"; unit: number; product: ProductId; quantity: number }
+  | { type: "retrieve"; unit: number; product: ProductId; quantity: number }
   | { type: "deposit"; amount: number }
   | { type: "withdraw"; amount: number }
   | { type: "borrow"; amount: number }
   | { type: "repay"; amount: number }
   | { type: "loan-more-time" }
   | { type: "buy-gun"; gun?: GunId }
+  | { type: "sell-gun"; gun: GunId }
   | { type: "use-local-service"; service: LocalServiceId }
-  | { type: "use-fence" }
+  | { type: "use-fence"; source: FenceSource }
   | { type: "rent-storage" }
-  | { type: "close-storage" }
+  | { type: "close-storage"; unit: number }
   | { type: "consult-contact" }
   | { type: "travel"; destination: BoroughId }
   | { type: "lay-low" }
@@ -470,9 +511,18 @@ export const LOAN_DAILY_RATE = 0.06;
 export const LOAN_RATE_PENALTY = 1.5;
 export const REPEAT_LOAN_ADVANCE = 25_000;
 export const REPEAT_LOAN_DEBT = 40_000;
+export const LOAN_PRESSURE_GROSS_VALUE = 500_000;
 export const STORAGE_CAPACITY = 200;
 export const STORAGE_DAILY_RENT = 200;
-export const NOTORIETY_PER_KILL = 12;
+export const MAX_STORAGE_UNITS = 3;
+export const STORAGE_LOCAL_BUY_MULTIPLIER = 1.2;
+export const STORAGE_REMOTE_BUY_MULTIPLIER = 1.4;
+export const TRADE_HEAT_VALUE_SCALE = 25_000;
+export const TRADE_HEAT_LOG_MULTIPLIER = 4;
+export const GUN_PURCHASE_EXPOSURE = 2;
+export const FAILED_ESCAPE_EXPOSURE = 6;
+export const POLICE_SHOOTOUT_EXPOSURE = 6;
+export const POLICE_KILL_EXPOSURE = 2;
 
 const BOROUGH_PROFILE: Record<
   BoroughId,
@@ -528,23 +578,31 @@ const BOROUGH_INDEX = Object.fromEntries(
 ) as Record<BoroughId, number>;
 const PRODUCT_VOLATILITY: Record<ProductId, number> = {
   green: 0.26,
-  acid: 0.66,
+  acid: 0.7,
   shrooms: 0.58,
   speed: 0.42,
-  molly: 0.61,
-  coke: 0.48,
-  heroin: 0.54,
+  molly: 0.62,
+  coke: 0.52,
+  heroin: 0.58,
   pills: 0.39,
   meth: 0.76,
   hash: 0.3,
-  opioids: 0.46,
+  opioids: 0.4,
   peyote: 0.7,
+};
+/** Fixed market structure; deliberately not exposed in player-facing views. */
+const HIGH_VALUE_HOME: Record<BoroughId, ProductId> = {
+  manhattan: "acid",
+  brooklyn: "molly",
+  queens: "coke",
+  bronx: "heroin",
+  staten: "opioids",
 };
 /** Durable borough spreads make ordinary route knowledge economically useful. */
 const PRODUCT_BOROUGH_BIAS: Record<BoroughId, Record<ProductId, number>> = {
   manhattan: {
     green: 1.2,
-    acid: 1.27,
+    acid: 0.62,
     shrooms: 1.18,
     speed: 1.22,
     molly: 1.35,
@@ -561,7 +619,7 @@ const PRODUCT_BOROUGH_BIAS: Record<BoroughId, Record<ProductId, number>> = {
     acid: 1.12,
     shrooms: 1.04,
     speed: 1,
-    molly: 1.24,
+    molly: 0.7,
     coke: 1.04,
     heroin: 1.02,
     pills: 1.02,
@@ -575,9 +633,9 @@ const PRODUCT_BOROUGH_BIAS: Record<BoroughId, Record<ProductId, number>> = {
     acid: 0.94,
     shrooms: 0.96,
     speed: 0.9,
-    molly: 0.96,
-    coke: 0.78,
-    heroin: 0.82,
+    molly: 1,
+    coke: 0.76,
+    heroin: 0.94,
     pills: 0.91,
     meth: 0.86,
     hash: 0.9,
@@ -589,13 +647,13 @@ const PRODUCT_BOROUGH_BIAS: Record<BoroughId, Record<ProductId, number>> = {
     acid: 0.91,
     shrooms: 0.88,
     speed: 0.78,
-    molly: 0.94,
+    molly: 1.02,
     coke: 0.91,
-    heroin: 0.9,
+    heroin: 0.76,
     pills: 0.72,
     meth: 0.82,
     hash: 0.81,
-    opioids: 0.74,
+    opioids: 0.9,
     peyote: 0.89,
   },
   staten: {
@@ -609,15 +667,10 @@ const PRODUCT_BOROUGH_BIAS: Record<BoroughId, Record<ProductId, number>> = {
     pills: 1.1,
     meth: 1.18,
     hash: 1.08,
-    opioids: 1.14,
+    opioids: 0.67,
     peyote: 1.38,
   },
 };
-const PRICE_CEILING: Partial<Record<ProductId, number>> = {
-  coke: 100000,
-  heroin: 100000,
-};
-
 const emptyInventory = (): Inventory =>
   Object.fromEntries(
     PRODUCTS.map((p) => [p.id, { quantity: 0, avgCost: 0 }]),
@@ -631,11 +684,8 @@ const emptyLedger = (): LedgerEntry => ({
 const STORAGE_BOROUGHS: StorageBoroughId[] = ["brooklyn", "queens", "staten"];
 const emptyStorageUnits = (): StorageUnits =>
   Object.fromEntries(
-    STORAGE_BOROUGHS.map((id) => [
-      id,
-      { active: false, inventory: emptyInventory() },
-    ]),
-  ) as StorageUnits;
+    STORAGE_BOROUGHS.map((id) => [id, { units: [] as StorageUnit[] }]),
+  ) as unknown as StorageUnits;
 const emptyQuantityLedger = (): Record<ProductId, number> =>
   Object.fromEntries(PRODUCTS.map((item) => [item.id, 0])) as Record<
     ProductId,
@@ -647,7 +697,6 @@ const emptyDailyTrades = (day: number): DailyTradeLedger => ({
   grossByProduct: emptyQuantityLedger(),
   rawExposureApplied: 0,
   quantityByProduct: emptyQuantityLedger(),
-  premiumTierByProduct: {},
 });
 const boroughMap = (): Record<BoroughId, BoroughState> =>
   Object.fromEntries(
@@ -699,11 +748,34 @@ function makeContactCandidates(seed: number): ContactCandidate[] {
   }));
 }
 
-export function accrueHeat(currentHeat: number, exposure: number): number {
+export function heatCeiling(identityKills: number): number {
+  return Math.min(100, 85 + Math.max(0, Math.floor(identityKills)) * 5);
+}
+
+export function heatSensitivity(
+  cumulativeExposure: number,
+  identityKills: number,
+): number {
+  const exposureEffect = Math.min(0.6, Math.max(0, cumulativeExposure) / 200);
+  const violenceEffect = Math.min(
+    0.8,
+    Math.max(0, Math.floor(identityKills)) * 0.1,
+  );
+  return 1 + exposureEffect + violenceEffect;
+}
+
+export function accrueHeat(
+  currentHeat: number,
+  rawExposure: number,
+  cumulativeExposure = 0,
+  identityKills = 0,
+): number {
   const heat = clamp(Math.round(currentHeat), 0, 100);
-  const pressure = Math.max(0, exposure);
-  const acceleration = 0.5 + 1.5 * (heat / 100) ** 2;
-  return clamp(heat + Math.round(pressure * acceleration), 0, 100);
+  const pressure = Math.max(0, rawExposure);
+  const increase = Math.round(
+    pressure * heatSensitivity(cumulativeExposure, identityKills),
+  );
+  return Math.min(heatCeiling(identityKills), heat + increase);
 }
 
 export interface HeatFactors {
@@ -717,18 +789,25 @@ export interface HeatFactors {
 export function heatAfterExposure(
   currentHeat: number,
   factors: HeatFactors,
+  cumulativeExposure = 0,
+  identityKills = 0,
 ): number {
   const transactionValue = Math.max(0, factors.transactionValue ?? 0);
-  let exposure = clamp(
-    Math.round(Math.log10(1 + transactionValue / 1000) * 4),
-    0,
-    24,
+  let exposure = Math.round(
+    Math.log10(1 + transactionValue / TRADE_HEAT_VALUE_SCALE) *
+      TRADE_HEAT_LOG_MULTIPLIER,
   );
-  if (factors.gunPurchase) exposure += 20;
-  if (factors.failedEscape) exposure += 14;
-  if (factors.policeShootout) exposure += 12;
-  exposure += Math.max(0, Math.floor(factors.policeKilled ?? 0)) * 18;
-  return accrueHeat(currentHeat, exposure);
+  if (factors.gunPurchase) exposure += GUN_PURCHASE_EXPOSURE;
+  if (factors.failedEscape) exposure += FAILED_ESCAPE_EXPOSURE;
+  if (factors.policeShootout) exposure += POLICE_SHOOTOUT_EXPOSURE;
+  exposure +=
+    Math.max(0, Math.floor(factors.policeKilled ?? 0)) * POLICE_KILL_EXPOSURE;
+  return accrueHeat(
+    currentHeat,
+    exposure,
+    cumulativeExposure + exposure,
+    identityKills,
+  );
 }
 
 export function heatAfterTrade(
@@ -738,15 +817,33 @@ export function heatAfterTrade(
   return heatAfterExposure(currentHeat, { transactionValue });
 }
 
-export function heatAfterLayingLow(currentHeat: number, heatFloor = 0): number {
+export function heatAfterElapsedDay(
+  currentHeat: number,
+  cumulativeExposure = 0,
+  identityKills = 0,
+): number {
   const heat = clamp(Math.round(currentHeat), 0, 100);
-  const reduction = Math.round(4 + (100 - heat) * 0.24);
-  return Math.max(clamp(Math.round(heatFloor), 0, 100), heat - reduction);
+  if (heat === 0) return 0;
+  const exposureStickiness = Math.min(
+    1.25,
+    Math.max(0, cumulativeExposure) / 160,
+  );
+  const violenceStickiness = Math.min(
+    1.4,
+    Math.max(0, Math.floor(identityKills)) * 0.35,
+  );
+  const reduction = Math.max(
+    1,
+    Math.round(
+      (10 + (100 - heat) * 0.1) / (1 + exposureStickiness + violenceStickiness),
+    ),
+  );
+  return Math.max(0, heat - reduction);
 }
 
 export function effectiveHeat(heat: number, destination: BoroughId): number {
   return clamp(
-    Math.round(destination === "manhattan" ? heat * 2 : heat),
+    Math.round(destination === "manhattan" ? heat * 1.5 : heat),
     0,
     100,
   );
@@ -941,13 +1038,12 @@ function makeMarket(
       local?.productId === p.id ? local.multiplier : 1;
     const rawPrice =
       p.base * profile.bias * durableSpread * noise * conditionMultiplier;
-    prices[p.id] = money(
-      Math.min(rawPrice, PRICE_CEILING[p.id] ?? Number.POSITIVE_INFINITY),
-    );
+    prices[p.id] = money(rawPrice);
     const listingRoll = unit(
       hashSeed(seed, day, BOROUGH_INDEX[id], PRODUCT_INDEX[p.id], 43),
     );
-    if (listingRoll < profile.listing) available.push(p.id);
+    const listingChance = HIGH_VALUE_HOME[id] === p.id ? 0.95 : profile.listing;
+    if (listingRoll < listingChance) available.push(p.id);
   }
   // A shock is always actionable; sparse borough listings must not hide it.
   if (local && !available.includes(local.productId))
@@ -980,20 +1076,40 @@ function eventFor(
   id: BoroughId,
 ): LocalCondition | undefined {
   if (day === 1) return undefined;
+  const homeProduct = HIGH_VALUE_HOME[id];
+  const homeGlut = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 208)) < 0.25;
+  if (homeGlut) {
+    const magnitude = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 206));
+    const p = product(homeProduct);
+    return {
+      id: `home-glut-${id}-${day}-${p.id}`,
+      label: `A shipment floods the ${p.name} market.`,
+      productId: p.id,
+      multiplier: 0.1 + magnitude * 0.22,
+      enforcementDelta: 0.03,
+      daysLeft: 1,
+    };
+  }
   const roll = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 202));
-  if (roll > 0.38) return undefined;
-  const index = hashSeed(seed, day, BOROUGH_INDEX[id], 203) % PRODUCTS.length;
-  const p = PRODUCTS[index];
-  const favorable = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 204)) > 0.45;
+  if (roll > 0.18) return undefined;
+  const otherProducts = PRODUCTS.filter(
+    (product) => product.id !== homeProduct,
+  );
+  const p =
+    otherProducts[
+      hashSeed(seed, day, BOROUGH_INDEX[id], 207) % otherProducts.length
+    ];
+  const directionRoll = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 204));
+  const glut = directionRoll < 0.45;
   const magnitude = unit(hashSeed(seed, day, BOROUGH_INDEX[id], 206));
   return {
     id: `${id}-${day}-${p.id}`,
-    label: favorable
-      ? `A seizure tightens ${p.name} supply here.`
-      : `A shipment floods the ${p.name} market.`,
+    label: glut
+      ? `A shipment floods the ${p.name} market.`
+      : `A seizure tightens ${p.name} supply here.`,
     productId: p.id,
-    multiplier: favorable ? 2.8 + magnitude * 3.2 : 0.1 + magnitude * 0.22,
-    enforcementDelta: favorable ? 0.12 : 0.03,
+    multiplier: glut ? 0.1 + magnitude * 0.22 : 2.8 + magnitude * 3.2,
+    enforcementDelta: glut ? 0.03 : 0.12,
     daysLeft: 2 + (hashSeed(seed, day, BOROUGH_INDEX[id], 205) % 3),
   };
 }
@@ -1008,7 +1124,9 @@ function projectedCondition(
     if (condition && condition.daysLeft <= 1) condition = undefined;
     else if (condition)
       condition = { ...condition, daysLeft: condition.daysLeft - 1 };
-    if (!condition) condition = eventFor(state.seed, day, id);
+    const candidate = eventFor(state.seed, day, id);
+    if (candidate?.id.startsWith("home-glut-") || !condition)
+      condition = candidate ?? condition;
   }
   return condition;
 }
@@ -1114,7 +1232,7 @@ function addTravelNotice(state: GameState): GameState {
   const noted = noteBorough
     ? addFieldNote(updated, "rumor", notice.message, noteBorough)
     : updated;
-  return addLog(noted, `TRAVEL: ${notice.message}`);
+  return addLog(noted, `JET: ${notice.message}`);
 }
 
 function decayConditions(
@@ -1171,9 +1289,11 @@ function arrive(
   countVisit = true,
 ): GameState {
   let states = decayConditions(state.boroughs);
-  const generated = states[destination].condition
-    ? undefined
-    : eventFor(state.seed, day, destination);
+  const candidate = eventFor(state.seed, day, destination);
+  const generated =
+    candidate?.id.startsWith("home-glut-") || !states[destination].condition
+      ? candidate
+      : undefined;
   const target = states[destination];
   // Enforcement is a durable borough baseline; the condition's delta is applied
   // only while that condition exists, so a crackdown cannot ratchet forever.
@@ -1236,7 +1356,7 @@ export function startGame(
 ): GameState {
   const cleanName = name.trim().slice(0, 24) || "Runner";
   const base = {
-    version: 2 as const,
+    version: 3 as const,
     seed: seed >>> 0,
     rng: hashSeed(seed, 1),
     name: cleanName,
@@ -1248,9 +1368,10 @@ export function startGame(
     debt: 10000,
     health: 100,
     heat: 0,
-    heatFloor: 0,
+    heatExposure: 0,
+    lastHeatIncreaseDay: 0,
     officersKilled: 0,
-    notorietyKills: 0,
+    identityKills: 0,
     guns: 0,
     weapons: [],
     capacity: COAT_CAPACITIES[0],
@@ -1258,7 +1379,7 @@ export function startGame(
     storageUnits: emptyStorageUnits(),
     dailyTrades: emptyDailyTrades(1),
     loanRate: LOAN_DAILY_RATE,
-    loanGraceUntilDay: 5,
+    loanGraceUntilDay: 6,
     loanPremiumPressure: false,
     contacts: [],
     contactCandidates: makeContactCandidates(seed),
@@ -1296,7 +1417,14 @@ function applyTradeExposure(
   id: ProductId,
   quantity: number,
   value: number,
-): Pick<GameState, "heat" | "dailyTrades" | "loanPremiumPressure"> {
+): Pick<
+  GameState,
+  | "heat"
+  | "heatExposure"
+  | "lastHeatIncreaseDay"
+  | "dailyTrades"
+  | "loanPremiumPressure"
+> {
   const ledger =
     state.dailyTrades.day === state.day
       ? state.dailyTrades
@@ -1310,33 +1438,30 @@ function applyTradeExposure(
     [id]: ledger.grossByProduct[id] + value,
   };
   const grossValue = ledger.grossValue + value;
-  const desiredRawExposure = clamp(
-    Math.round(Math.log10(1 + grossValue / 10_000) * 3),
-    0,
-    18,
+  const desiredRawExposure = Math.round(
+    Math.log10(1 + grossValue / TRADE_HEAT_VALUE_SCALE) *
+      TRADE_HEAT_LOG_MULTIPLIER,
   );
   const incrementalRawExposure = Math.max(
     0,
     desiredRawExposure - ledger.rawExposureApplied,
   );
-  let heat = accrueHeat(state.heat, incrementalRawExposure);
+  const heatExposure = state.heatExposure + incrementalRawExposure;
+  const heat = accrueHeat(
+    state.heat,
+    incrementalRawExposure,
+    heatExposure,
+    state.identityKills,
+  );
   const premium = id === "coke" || id === "heroin";
-  const oldTier = ledger.premiumTierByProduct[id] ?? 0;
-  let newTier: 0 | 1 | 2 = oldTier;
-  if (premium && (quantityByProduct[id] >= 25 || grossByProduct[id] >= 500_000))
-    newTier = 2;
-  else if (premium && quantityByProduct[id] > 10) newTier = 1;
-  if (newTier === 2 && oldTier < 2) heat = 100;
-  else if (newTier === 1 && oldTier < 1) {
-    const premiumHeat =
-      30 + (hashSeed(state.seed, state.day, PRODUCT_INDEX[id], 0x4ea7) % 21);
-    heat = clamp(heat + premiumHeat, 0, 100);
-  }
   return {
     heat,
+    heatExposure,
+    lastHeatIncreaseDay:
+      incrementalRawExposure > 0 ? state.day : state.lastHeatIncreaseDay,
     loanPremiumPressure:
       state.loanPremiumPressure ||
-      grossValue > 100_000 ||
+      grossValue > LOAN_PRESSURE_GROSS_VALUE ||
       (premium && quantityByProduct[id] > 10),
     dailyTrades: {
       ...ledger,
@@ -1344,11 +1469,25 @@ function applyTradeExposure(
       grossByProduct,
       rawExposureApplied: desiredRawExposure,
       quantityByProduct,
-      premiumTierByProduct: {
-        ...ledger.premiumTierByProduct,
-        ...(newTier > 0 ? { [id]: newTier } : {}),
-      },
     },
+  };
+}
+
+function applyRawHeatExposure(
+  state: GameState,
+  rawExposure: number,
+  identityKills = state.identityKills,
+): Pick<
+  GameState,
+  "heat" | "heatExposure" | "lastHeatIncreaseDay" | "identityKills"
+> {
+  const raw = Math.max(0, rawExposure);
+  const heatExposure = state.heatExposure + raw;
+  return {
+    heat: accrueHeat(state.heat, raw, heatExposure, identityKills),
+    heatExposure,
+    lastHeatIncreaseDay: raw > 0 ? state.day : state.lastHeatIncreaseDay,
+    identityKills,
   };
 }
 
@@ -1381,6 +1520,67 @@ function buy(state: GameState, id: ProductId, quantity: number): GameState {
   );
 }
 
+function buyStorage(
+  state: GameState,
+  storageBorough: StorageBoroughId,
+  slot: number,
+  id: ProductId,
+  quantity: number,
+): GameState {
+  if (state.phase !== "market")
+    return invalid(state, "finish the encounter first");
+  if (!state.market.listed.includes(id))
+    return invalid(state, `${productName(id)} is not listed here today`);
+  const location = state.storageUnits[storageBorough];
+  const unit = storageUnitAt(state, storageBorough, slot);
+  if (!unit) return invalid(state, "rent that storage unit before using it");
+  if (unit.productId !== undefined && unit.productId !== id)
+    return invalid(
+      state,
+      `unit ${slot} already contains ${productName(unit.productId)}`,
+    );
+  const q = Math.floor(quantity);
+  if (!Number.isFinite(q) || q <= 0)
+    return invalid(state, "quantity must be positive");
+  if (q > STORAGE_CAPACITY)
+    return invalid(state, `a delivery cannot exceed ${STORAGE_CAPACITY} units`);
+  if (unit.quantity + q > STORAGE_CAPACITY)
+    return invalid(state, `unit ${slot} does not have enough space`);
+  const unitPrice = Math.ceil(
+    state.market.prices[id] *
+      storageBuyMultiplier(state.current, storageBorough),
+  );
+  const cost = q * unitPrice;
+  if (cost > state.cash) return invalid(state, "you do not have enough cash");
+  const updatedUnit: StorageUnit = {
+    ...unit,
+    productId: id,
+    avgCost: (unit.quantity * unit.avgCost + cost) / (unit.quantity + q),
+    quantity: unit.quantity + q,
+  };
+  const exposure = applyTradeExposure(state, id, q, cost);
+  const storageName = BOROUGHS.find(
+    (borough) => borough.id === storageBorough,
+  )?.name;
+  return addLog(
+    {
+      ...state,
+      cash: state.cash - cost,
+      storageUnits: {
+        ...state.storageUnits,
+        [storageBorough]: {
+          ...location,
+          units: location.units.map((candidate) =>
+            candidate.slot === slot ? updatedUnit : candidate,
+          ),
+        },
+      },
+      ...exposure,
+    },
+    `Bought ${q} ${productName(id)} into ${storageName} storage unit ${slot} for ${cashForLog(cost)}.`,
+  );
+}
+
 function sell(state: GameState, id: ProductId, quantity: number): GameState {
   if (state.phase !== "market")
     return invalid(state, "finish the encounter first");
@@ -1408,6 +1608,63 @@ function sell(state: GameState, id: ProductId, quantity: number): GameState {
   );
 }
 
+export function storageSaleMultiplier(
+  marketBorough: BoroughId,
+  storageBorough: StorageBoroughId,
+): number {
+  return marketBorough === storageBorough ? 0.7 : 0.5;
+}
+
+export function storageBuyMultiplier(
+  marketBorough: BoroughId,
+  storageBorough: StorageBoroughId,
+): number {
+  return marketBorough === storageBorough
+    ? STORAGE_LOCAL_BUY_MULTIPLIER
+    : STORAGE_REMOTE_BUY_MULTIPLIER;
+}
+
+function sellStorage(
+  state: GameState,
+  storageBorough: StorageBoroughId,
+  slot: number,
+): GameState {
+  if (state.phase !== "market")
+    return invalid(state, "finish the encounter first");
+  const location = state.storageUnits[storageBorough];
+  const unit = storageUnitAt(state, storageBorough, slot);
+  if (!unit) return invalid(state, "that storage unit is not active");
+  if (unit.productId === undefined || unit.quantity < 1)
+    return invalid(state, "that storage unit is empty");
+  const id = unit.productId;
+  if (!state.market.listed.includes(id))
+    return invalid(state, `${productName(id)} is not listed here today`);
+  const q = unit.quantity;
+  const multiplier = storageSaleMultiplier(state.current, storageBorough);
+  const unitPrice = Math.floor(state.market.prices[id] * multiplier);
+  const proceeds = q * unitPrice;
+  const exposure = applyTradeExposure(state, id, q, proceeds);
+  const storageName = BOROUGHS.find(
+    (borough) => borough.id === storageBorough,
+  )?.name;
+  return addLog(
+    {
+      ...state,
+      cash: state.cash + proceeds,
+      storageUnits: {
+        ...state.storageUnits,
+        [storageBorough]: {
+          units: location.units.filter((candidate) => candidate.slot !== slot),
+          lateSinceDay:
+            location.units.length === 1 ? undefined : location.lateSinceDay,
+        },
+      },
+      ...exposure,
+    },
+    `Sold all ${q} stored ${productName(id)} from ${storageName} unit ${slot} for ${cashForLog(proceeds)} and ended its contract.`,
+  );
+}
+
 export function isStorageBorough(id: BoroughId): id is StorageBoroughId {
   return STORAGE_BOROUGHS.includes(id as StorageBoroughId);
 }
@@ -1415,12 +1672,14 @@ export function isStorageBorough(id: BoroughId): id is StorageBoroughId {
 export function storageUnitAt(
   state: GameState,
   id: StorageBoroughId,
-): StorageUnit {
-  return state.storageUnits[id];
+  slot: number,
+): StorageUnit | undefined {
+  return state.storageUnits[id].units.find((unit) => unit.slot === slot);
 }
 
 function transferStorage(
   state: GameState,
+  slot: number,
   id: ProductId,
   quantity: number,
   direction: "store" | "retrieve",
@@ -1429,47 +1688,85 @@ function transferStorage(
     return invalid(state, "finish the encounter first");
   if (!isStorageBorough(state.current))
     return invalid(state, "there is no storage unit here");
-  const unit = storageUnitAt(state, state.current);
-  if (!unit.active) return invalid(state, "rent the storage unit first");
+  const storageBorough = state.current;
+  const location = state.storageUnits[storageBorough];
+  const unit = storageUnitAt(state, storageBorough, slot);
+  if (!unit) return invalid(state, "rent that storage unit first");
   const q = Math.floor(quantity);
   if (!Number.isFinite(q) || q <= 0)
     return invalid(state, "quantity must be positive");
   const inventory = cloneInventory(state.inventory);
-  const storage = cloneInventory(unit.inventory);
-  const source = direction === "store" ? inventory[id] : storage[id];
-  const target = direction === "store" ? storage[id] : inventory[id];
-  if (q > source.quantity)
+  if (
+    direction === "store" &&
+    unit.productId !== undefined &&
+    unit.productId !== id
+  )
+    return invalid(
+      state,
+      `unit ${slot} already contains ${productName(unit.productId)}`,
+    );
+  if (direction === "retrieve" && unit.productId !== id)
+    return invalid(state, `unit ${slot} does not contain ${productName(id)}`);
+  const sourceQuantity =
+    direction === "store" ? inventory[id].quantity : unit.quantity;
+  if (q > sourceQuantity)
     return invalid(
       state,
       direction === "store"
-        ? `you only carry ${source.quantity} ${productName(id)}`
-        : `only ${source.quantity} ${productName(id)} is in storage`,
+        ? `you only carry ${sourceQuantity} ${productName(id)}`
+        : `only ${sourceQuantity} ${productName(id)} is in storage`,
     );
   if (
     direction === "retrieve" &&
     totalCargo(state.inventory) + q > state.capacity
   )
     return invalid(state, "your coat is full");
-  if (direction === "store" && totalCargo(storage) + q > STORAGE_CAPACITY)
+  if (direction === "store" && unit.quantity + q > STORAGE_CAPACITY)
     return invalid(state, "the storage unit is full");
-  const movedCost = source.avgCost;
-  target.avgCost =
-    (target.quantity * target.avgCost + q * movedCost) / (target.quantity + q);
-  target.quantity += q;
-  source.quantity -= q;
-  if (source.quantity === 0) source.avgCost = 0;
+  let updatedUnit: StorageUnit;
+  if (direction === "store") {
+    const coatItem = inventory[id];
+    updatedUnit = {
+      ...unit,
+      productId: id,
+      avgCost:
+        (unit.quantity * unit.avgCost + q * coatItem.avgCost) /
+        (unit.quantity + q),
+      quantity: unit.quantity + q,
+    };
+    coatItem.quantity -= q;
+    if (coatItem.quantity === 0) coatItem.avgCost = 0;
+  } else {
+    const coatItem = inventory[id];
+    coatItem.avgCost =
+      (coatItem.quantity * coatItem.avgCost + q * unit.avgCost) /
+      (coatItem.quantity + q);
+    coatItem.quantity += q;
+    const remaining = unit.quantity - q;
+    updatedUnit = {
+      ...unit,
+      productId: remaining > 0 ? unit.productId : undefined,
+      quantity: remaining,
+      avgCost: remaining > 0 ? unit.avgCost : 0,
+    };
+  }
   return addLog(
     {
       ...state,
       inventory,
       storageUnits: {
         ...state.storageUnits,
-        [state.current]: { ...unit, inventory: storage },
+        [storageBorough]: {
+          ...location,
+          units: location.units.map((candidate) =>
+            candidate.slot === slot ? updatedUnit : candidate,
+          ),
+        },
       },
     },
     direction === "store"
-      ? `Stored ${q} ${productName(id)} in ${BOROUGHS.find((item) => item.id === state.current)?.name}.`
-      : `Retrieved ${q} ${productName(id)} from storage.`,
+      ? `Stored ${q} ${productName(id)} in ${BOROUGHS.find((item) => item.id === state.current)?.name} unit ${slot}.`
+      : `Retrieved ${q} ${productName(id)} from storage unit ${slot}.`,
   );
 }
 
@@ -1478,11 +1775,18 @@ function rentStorage(state: GameState): GameState {
     return invalid(state, "finish the current encounter first");
   if (!isStorageBorough(state.current))
     return invalid(state, "there is no storage unit here");
-  const unit = storageUnitAt(state, state.current);
-  if (unit.active) return invalid(state, "you already rent this unit");
+  const storageBorough = state.current;
+  const location = state.storageUnits[storageBorough];
+  if (location.lateSinceDay !== undefined)
+    return invalid(state, "settle the overdue rent before adding storage");
+  if (location.units.length >= MAX_STORAGE_UNITS)
+    return invalid(state, `you already rent ${MAX_STORAGE_UNITS} units here`);
   if (state.cash < STORAGE_DAILY_RENT)
     return invalid(state, `you need ${cashForLog(STORAGE_DAILY_RENT)} in cash`);
   const name = BOROUGHS.find((item) => item.id === state.current)?.name;
+  const usedSlots = new Set(location.units.map((unit) => unit.slot));
+  const slot = [1, 2, 3].find((candidate) => !usedSlots.has(candidate));
+  if (!slot) return invalid(state, "there is no storage slot available");
   return addLog(
     addFieldNote(
       {
@@ -1490,36 +1794,111 @@ function rentStorage(state: GameState): GameState {
         cash: state.cash - STORAGE_DAILY_RENT,
         storageUnits: {
           ...state.storageUnits,
-          [state.current]: { ...unit, active: true, lateSinceDay: undefined },
+          [storageBorough]: {
+            ...location,
+            units: [...location.units, { slot, quantity: 0, avgCost: 0 }].sort(
+              (a, b) => a.slot - b.slot,
+            ),
+            lateSinceDay: undefined,
+          },
         },
       },
       "storage",
-      `Rented a 200-space storage unit in ${name} for $200 per day.`,
+      `Rented storage unit ${slot} of ${MAX_STORAGE_UNITS} in ${name} for $200 per day.`,
       state.current,
     ),
     `Rented storage in ${name}.`,
   );
 }
 
-function closeStorage(state: GameState): GameState {
+function closeStorage(state: GameState, slot: number): GameState {
   if (state.phase !== "market")
     return invalid(state, "finish the current encounter first");
   if (!isStorageBorough(state.current))
     return invalid(state, "there is no storage unit here");
-  const unit = storageUnitAt(state, state.current);
-  if (!unit.active) return invalid(state, "you do not rent this unit");
-  if (totalCargo(unit.inventory) > 0)
-    return invalid(state, "empty the unit before closing it");
+  const storageBorough = state.current;
+  const location = state.storageUnits[storageBorough];
+  const unit = storageUnitAt(state, storageBorough, slot);
+  if (!unit) return invalid(state, "you do not rent that storage unit");
+  if (location.lateSinceDay !== undefined)
+    return invalid(state, "settle the overdue rent before releasing storage");
+  if (unit.quantity > 0)
+    return invalid(state, "empty that storage unit before releasing it");
+  const remainingUnits = location.units.filter(
+    (candidate) => candidate.slot !== slot,
+  );
   return addLog(
     {
       ...state,
       storageUnits: {
         ...state.storageUnits,
-        [state.current]: { ...unit, active: false, lateSinceDay: undefined },
+        [storageBorough]: { units: remainingUnits },
       },
     },
-    "Closed the empty storage unit.",
+    `Released storage unit ${slot}. ${remainingUnits.length} remain.`,
   );
+}
+
+interface DebtCollection {
+  state: GameState;
+  cashSeized: number;
+  debtCredit: number;
+  cashRetained: number;
+  stockLost: number;
+  coatLost: boolean;
+}
+
+/** The same financial collection rule governs every enforcer intervention. */
+function collectOutstandingDebt(state: GameState): DebtCollection {
+  const cashBefore = state.cash;
+  const debtCredit = Math.min(cashBefore, state.debt);
+  const surplus = Math.max(0, cashBefore - state.debt);
+  const cashRetained = Math.floor(surplus * 0.1);
+  const cashSeized = cashBefore - cashRetained;
+  const debt = Math.max(0, state.debt - debtCredit);
+  const stripCoat = debt > 0;
+  const stockLost = stripCoat ? totalCargo(state.inventory) : 0;
+  const coatLost = stripCoat && state.capacity > COAT_CAPACITIES[0];
+  return {
+    cashSeized,
+    debtCredit,
+    cashRetained,
+    stockLost,
+    coatLost,
+    state: {
+      ...state,
+      cash: cashRetained,
+      debt,
+      inventory: stripCoat ? emptyInventory() : state.inventory,
+      capacity: stripCoat ? COAT_CAPACITIES[0] : state.capacity,
+      loanRate: debt === 0 ? LOAN_DAILY_RATE : state.loanRate,
+      loanPremiumPressure: debt === 0 ? false : state.loanPremiumPressure,
+    },
+  };
+}
+
+function debtCollectionMessage(
+  collection: DebtCollection,
+  healthLoss: number,
+): string {
+  const details = ["The loan shark's enforcers beat you down."];
+  if (collection.cashSeized > 0)
+    details.push(`They take ${cashForLog(collection.cashSeized)}.`);
+  if (collection.debtCredit > 0)
+    details.push(
+      `${cashForLog(collection.debtCredit)} is credited toward your debt.`,
+    );
+  if (collection.cashRetained > 0)
+    details.push(`You keep ${cashForLog(collection.cashRetained)}.`);
+  if (collection.state.debt > 0)
+    details.push(
+      collection.stockLost > 0 || collection.coatLost
+        ? "They also take your coat and everything in it."
+        : "Your debt is still outstanding.",
+    );
+  else details.push("Your debt is paid off.");
+  details.push(`You lose ${healthLoss} health.`);
+  return details.join(" ");
 }
 
 function service(
@@ -1569,7 +1948,7 @@ function service(
         cash: state.cash + REPEAT_LOAN_ADVANCE,
         debt: REPEAT_LOAN_DEBT,
         loanRate: LOAN_DAILY_RATE,
-        loanGraceUntilDay: state.day + 4,
+        loanGraceUntilDay: state.day + 5,
         loanPremiumPressure: false,
       },
       "loan-shark",
@@ -1604,22 +1983,22 @@ function service(
         rng: detectionRng,
       });
       const healthLoss = 10 + Math.floor(damageRoll * 21);
-      const extraCredit = Math.min(debtAfterPayment, cashAfterPayment);
-      const debt = Math.max(0, debtAfterPayment - extraCredit);
-      const punished: GameState = {
+      const collection = collectOutstandingDebt({
         ...state,
         rng: damageRng,
-        cash: 0,
-        debt,
+        cash: cashAfterPayment,
+        debt: debtAfterPayment,
+      });
+      const punished: GameState = {
+        ...collection.state,
         health: Math.max(0, state.health - healthLoss),
-        loanRate: debt === 0 ? LOAN_DAILY_RATE : state.loanRate,
-        loanPremiumPressure: debt === 0 ? false : state.loanPremiumPressure,
       };
-      const message =
-        `The loan shark spots the cash you held back. His men f***ed you up and took ${cashForLog(cashAfterPayment)}. ` +
-        `${cashForLog(extraCredit)} is credited toward your debt. You lost ${healthLoss} health.`;
+      const message = `The loan shark spots the cash you held back. ${debtCollectionMessage(collection, healthLoss)}`;
       if (punished.health <= 0) {
-        const ended = endGame(punished, "The loan shark's men killed you.");
+        const ended = endGame(
+          punished,
+          "The loan shark's enforcers killed you.",
+        );
         const result = withOutcome(
           ended,
           "loan-shark",
@@ -1636,7 +2015,7 @@ function service(
                 followUp: {
                   kind: "loan-shark",
                   title: "They wasted you!!!",
-                  message: "The beating kills you.",
+                  message: "",
                   nextPhase: "gameover",
                   buttonLabel: "Game over",
                 },
@@ -1671,24 +2050,21 @@ function askLoanSharkForMoreTime(state: GameState): GameState {
     return invalid(state, "finish the current encounter first");
   if (state.current !== state.home)
     return invalid(state, "the loan shark only deals at home");
+  if (state.debt <= 0) return invalid(state, "you do not owe anything");
   const [damageRoll, rng] = nextRandom(state);
   const healthLoss = 10 + Math.floor(damageRoll * 21);
-  const cashLost = state.cash;
+  const collection = collectOutstandingDebt({ ...state, rng });
   const punished: GameState = {
-    ...state,
-    rng,
-    cash: 0,
+    ...collection.state,
     health: Math.max(0, state.health - healthLoss),
   };
-  const message =
-    `The loan shark's men f***ed you up and took ${cashForLog(cashLost)}. ` +
-    `None of it is credited toward your debt. You lost ${healthLoss} health.`;
+  const message = debtCollectionMessage(collection, healthLoss);
   if (punished.health <= 0) {
-    const ended = endGame(punished, "The loan shark's men killed you.");
+    const ended = endGame(punished, "The loan shark's enforcers killed you.");
     const result = withOutcome(
       ended,
       "loan-shark",
-      "That was the wrong answer.",
+      `Wrong answer, ${state.name}.`,
       message,
       "gameover",
     );
@@ -1700,7 +2076,7 @@ function askLoanSharkForMoreTime(state: GameState): GameState {
             followUp: {
               kind: "loan-shark",
               title: "They wasted you!!!",
-              message: "The beating kills you.",
+              message: "",
               nextPhase: "gameover",
               buttonLabel: "Game over",
             },
@@ -1711,7 +2087,7 @@ function askLoanSharkForMoreTime(state: GameState): GameState {
   return withOutcome(
     punished,
     "loan-shark",
-    "That was the wrong answer.",
+    `Wrong answer, ${state.name}.`,
     message,
   );
 }
@@ -1741,22 +2117,69 @@ function buyGun(state: GameState, gunId?: GunId): GameState {
       cash: state.cash - gun.price,
       guns: state.guns + 1,
       weapons: [...owned, gun.id],
-      heat: heatAfterExposure(state.heat, { gunPurchase: true }),
+      ...applyRawHeatExposure(state, GUN_PURCHASE_EXPOSURE),
     },
     `Bought a ${gun.name} for ${cashForLog(gun.price)}. Keep it quiet.`,
+  );
+}
+
+function sellGun(state: GameState, gunId: GunId): GameState {
+  if (state.phase !== "market")
+    return invalid(
+      state,
+      "the gear contact is unavailable during an encounter",
+    );
+  if (state.current !== "bronx")
+    return invalid(state, "guns can be sold only in The Bronx");
+  const gun = GUN_CATALOG.find((candidate) => candidate.id === gunId);
+  const owned = weaponIds(state);
+  if (!gun || !owned.includes(gunId))
+    return invalid(state, "you do not carry that gun");
+  const proceeds = Math.floor(gun.price * 0.5);
+  return addLog(
+    {
+      ...state,
+      cash: state.cash + proceeds,
+      guns: state.guns - 1,
+      weapons: owned.filter((id) => id !== gunId),
+    },
+    `Sold the ${gun.name} for ${cashForLog(proceeds)}.`,
   );
 }
 const cashForLog = (value: number): string =>
   `$${Math.round(value).toLocaleString()}`;
 
-export function fenceValue(state: GameState): number {
+function fenceReferencePrice(state: GameState, id: ProductId): number {
+  return (
+    state.boroughs.staten.ledger.observations[id]?.price ??
+    state.market.prices[id]
+  );
+}
+
+export function fenceMultiplier(source: FenceSource): number {
+  if (source === "coat") return 0.3;
+  return source.borough === "staten" ? 0.3 * 0.7 : 0.3 * 0.5;
+}
+
+export function fenceValue(
+  state: GameState,
+  source: FenceSource = "coat",
+): number {
+  const multiplier = fenceMultiplier(source);
+  if (source === "coat")
+    return Math.floor(
+      PRODUCTS.reduce(
+        (total, item) =>
+          total +
+          state.inventory[item.id].quantity *
+            fenceReferencePrice(state, item.id),
+        0,
+      ) * multiplier,
+    );
+  const unit = storageUnitAt(state, source.borough, source.unit);
+  if (!unit?.productId || unit.quantity < 1) return 0;
   return Math.floor(
-    PRODUCTS.reduce(
-      (total, item) =>
-        total +
-        state.inventory[item.id].quantity * state.market.prices[item.id],
-      0,
-    ) * 0.7,
+    unit.quantity * fenceReferencePrice(state, unit.productId) * multiplier,
   );
 }
 
@@ -1767,7 +2190,9 @@ export function localServiceError(
   if (state.phase !== "market") return "Finish the current encounter first.";
   if (serviceId === "fence") {
     if (state.current !== "staten") return "The fence is on Staten Island.";
-    if (totalCargo(state.inventory) < 1) return "Your coat is empty.";
+    const stored = storedUnits(state);
+    if (totalCargo(state.inventory) + stored < 1)
+      return "You have no stock to fence.";
     return undefined;
   }
   const offer = LOCAL_SERVICES[state.current].find(
@@ -1838,8 +2263,9 @@ function useLocalService(
       ...state,
       cash: state.cash - offer.cost,
       heat: 0,
-      heatFloor: 0,
-      notorietyKills: 0,
+      heatExposure: 0,
+      identityKills: 0,
+      lastHeatIncreaseDay: state.day,
     };
     for (let day = 0; day < offer.days; day++)
       next = arrive(
@@ -1852,22 +2278,43 @@ function useLocalService(
     return presentNotices(
       addLog(
         next,
-        `Plastic surgery cost ${cashForLog(offer.cost)} and ${offer.days} days. Your heat and notoriety are gone.`,
+        `Plastic surgery cost ${cashForLog(offer.cost)} and ${offer.days} days. Your heat and accumulated exposure are gone.`,
       ),
     );
   }
   return state;
 }
 
-function useFence(state: GameState): GameState {
+function useFence(state: GameState, source: FenceSource): GameState {
   const error = localServiceError(state, "fence");
   if (error) return invalid(state, error.toLowerCase());
-  const proceeds = fenceValue(state);
+  const unit =
+    source === "coat"
+      ? undefined
+      : storageUnitAt(state, source.borough, source.unit);
+  if (source !== "coat" && !unit)
+    return invalid(state, "that storage unit is not active");
+  if (
+    source === "coat"
+      ? totalCargo(state.inventory) < 1
+      : !unit?.productId || unit.quantity < 1
+  )
+    return invalid(state, "that inventory is empty");
+  const proceeds = fenceValue(state, source);
   let exposureState = state;
-  for (const item of PRODUCTS) {
-    const quantity = state.inventory[item.id].quantity;
+  const fencedStock =
+    source === "coat"
+      ? PRODUCTS.map((item) => ({
+          id: item.id,
+          quantity: state.inventory[item.id].quantity,
+        }))
+      : [{ id: unit!.productId!, quantity: unit!.quantity }];
+  for (const item of fencedStock) {
+    const quantity = item.quantity;
     if (quantity < 1) continue;
-    const value = Math.floor(quantity * state.market.prices[item.id] * 0.7);
+    const value = Math.floor(
+      quantity * fenceReferencePrice(state, item.id) * fenceMultiplier(source),
+    );
     const exposure = applyTradeExposure(
       exposureState,
       item.id,
@@ -1876,16 +2323,40 @@ function useFence(state: GameState): GameState {
     );
     exposureState = { ...exposureState, ...exposure };
   }
+  const sold: GameState = {
+    ...state,
+    cash: state.cash + proceeds,
+    heat: exposureState.heat,
+    heatExposure: exposureState.heatExposure,
+    lastHeatIncreaseDay: exposureState.lastHeatIncreaseDay,
+    dailyTrades: exposureState.dailyTrades,
+    loanPremiumPressure: exposureState.loanPremiumPressure,
+  };
+  const emptied: GameState =
+    source === "coat"
+      ? { ...sold, inventory: emptyInventory() }
+      : {
+          ...sold,
+          storageUnits: {
+            ...sold.storageUnits,
+            [source.borough]: {
+              units: sold.storageUnits[source.borough].units.filter(
+                (candidate) => candidate.slot !== source.unit,
+              ),
+              lateSinceDay:
+                sold.storageUnits[source.borough].units.length === 1
+                  ? undefined
+                  : sold.storageUnits[source.borough].lateSinceDay,
+            },
+          },
+        };
+  const sourceName =
+    source === "coat"
+      ? "your coat"
+      : `${BOROUGHS.find((borough) => borough.id === source.borough)?.name} storage unit ${source.unit}`;
   return addLog(
-    {
-      ...state,
-      cash: state.cash + proceeds,
-      inventory: emptyInventory(),
-      heat: exposureState.heat,
-      dailyTrades: exposureState.dailyTrades,
-      loanPremiumPressure: exposureState.loanPremiumPressure,
-    },
-    `The fence bought everything in your coat for ${cashForLog(proceeds)}.`,
+    emptied,
+    `The fence bought everything in ${sourceName} for ${cashForLog(proceeds)}${source === "coat" ? "." : " and ended its contract."}`,
   );
 }
 
@@ -1994,37 +2465,47 @@ function nextRandom(state: GameState): [number, number] {
 
 function applyInterest(state: GameState): GameState {
   const nextDay = state.day + 1;
+  const heat =
+    state.lastHeatIncreaseDay === state.day
+      ? state.heat
+      : heatAfterElapsedDay(
+          state.heat,
+          state.heatExposure,
+          state.identityKills,
+        );
   let next: GameState = {
     ...state,
+    heat,
     bank: Math.floor(state.bank * (1 + BANK_DAILY_RATE)),
     debt: state.debt > 0 ? Math.ceil(state.debt * (1 + state.loanRate)) : 0,
   };
   for (const id of STORAGE_BOROUGHS) {
-    const unit = next.storageUnits[id];
-    if (!unit.active) continue;
+    const location = next.storageUnits[id];
+    if (location.units.length < 1) continue;
+    const rent = STORAGE_DAILY_RENT * location.units.length;
     const name = BOROUGHS.find((borough) => borough.id === id)?.name ?? id;
-    if (unit.lateSinceDay !== undefined) {
-      if (next.cash >= STORAGE_DAILY_RENT) {
+    if (location.lateSinceDay !== undefined) {
+      if (next.cash >= rent) {
         next = {
           ...next,
-          cash: next.cash - STORAGE_DAILY_RENT,
+          cash: next.cash - rent,
           storageUnits: {
             ...next.storageUnits,
-            [id]: { ...unit, lateSinceDay: undefined },
+            [id]: { ...location, lateSinceDay: undefined },
           },
         };
       } else {
-        const lost = totalCargo(unit.inventory);
-        const message = `The ${name} storage unit is liquidated for unpaid rent. ${lost} ${lost === 1 ? "item is" : "items are"} gone.`;
+        const lost = location.units.reduce(
+          (total, unit) => total + unit.quantity,
+          0,
+        );
+        const message = `Your ${name} storage contracts are liquidated for unpaid rent. ${lost} ${lost === 1 ? "item is" : "items are"} gone.`;
         next = addFieldNote(
           {
             ...next,
             storageUnits: {
               ...next.storageUnits,
-              [id]: {
-                active: false,
-                inventory: emptyInventory(),
-              },
+              [id]: { units: [] },
             },
             pendingNotices: [
               ...(next.pendingNotices ?? []),
@@ -2040,19 +2521,19 @@ function applyInterest(state: GameState): GameState {
       }
       continue;
     }
-    if (next.cash >= STORAGE_DAILY_RENT) {
-      next = { ...next, cash: next.cash - STORAGE_DAILY_RENT };
+    if (next.cash >= rent) {
+      next = { ...next, cash: next.cash - rent };
       continue;
     }
     const message =
       `You have a voicemail from the ${name} storage location. ` +
-      "Your rent is late. If you don't pay by tomorrow, your storage unit will be liquidated.";
+      `Your ${cashForLog(rent)} rent is late. If you don't pay by tomorrow, your storage units will be liquidated.`;
     next = addFieldNote(
       {
         ...next,
         storageUnits: {
           ...next.storageUnits,
-          [id]: { ...unit, lateSinceDay: nextDay },
+          [id]: { ...location, lateSinceDay: nextDay },
         },
         pendingNotices: [
           ...(next.pendingNotices ?? []),
@@ -2076,24 +2557,25 @@ export function policeEncounterChance(
   cargoWorth: number,
 ): number {
   const normalizedHeat = clamp(Math.round(heat), 0, 100) / 100;
-  const heatRisk = 0.002 + 0.798 * normalizedHeat ** 2.2;
+  const heatRisk = 0.005 + 0.4 * normalizedHeat ** 2;
   const cargoPressure = clamp(
     Math.log10(1 + Math.max(0, cargoWorth) / 10_000) * 0.05,
     0,
     0.2,
   );
   const context = clamp(0.75 + routePressure + cargoPressure, 0.8, 1.35);
-  return clamp(heatRisk * context, 0, 0.9);
+  return clamp(heatRisk * context, 0, 0.55);
 }
 
 export function policeOfficerRange(heat: number): {
   min: number;
   max: number;
 } {
-  const level = clamp(Math.round(heat), 0, 100);
+  const x = clamp(Math.round(heat), 0, 100) / 100;
+  const expected = Math.max(1, 15 * (3 * x ** 2 - 2 * x ** 3));
   return {
-    min: clamp(1 + Math.floor(level / 25), 1, 5),
-    max: clamp(2 + Math.floor(level / 10), 2, 12),
+    min: clamp(Math.floor(expected), 1, 15),
+    max: clamp(Math.ceil(expected), 1, 15),
   };
 }
 
@@ -2119,9 +2601,9 @@ export function loanSharkEncounterChance(
 
 function travel(state: GameState, destination: BoroughId): GameState {
   if (state.phase !== "market")
-    return invalid(state, "you cannot travel during an encounter");
+    return invalid(state, "you cannot jet during an encounter");
   if (state.day >= 30)
-    return invalid(state, "Day 30 is for settling up, not traveling");
+    return invalid(state, "Day 30 is for settling up, not jetting");
   if (destination === state.current)
     return invalid(state, "you are already there");
   const day = state.day + 1;
@@ -2130,7 +2612,7 @@ function travel(state: GameState, destination: BoroughId): GameState {
       applyInterest(state),
       destination,
       day,
-      `You traveled from ${BOROUGHS.find((b) => b.id === state.current)?.name}.`,
+      `You jetted from ${BOROUGHS.find((b) => b.id === state.current)?.name}.`,
     ),
   );
   const enforcerChance = loanSharkEncounterChance(arrival, destination);
@@ -2230,7 +2712,6 @@ function resolveEncounter(
           weapons: remainingWeapons,
           phase: "market",
           pendingEncounter: undefined,
-          heat: Math.max(state.heatFloor, state.heat - 6),
         },
         "police",
         "You got away.",
@@ -2250,7 +2731,7 @@ function resolveEncounter(
       weapons: remainingWeapons,
       inventory,
       phase: "encounter" as Phase,
-      heat: heatAfterExposure(state.heat, { failedEscape: true }),
+      ...applyRawHeatExposure(state, FAILED_ESCAPE_EXPOSURE),
       pendingEncounter: { ...encounter, stage: "police-fire" as const },
     };
     return withOutcome(
@@ -2315,28 +2796,21 @@ function resolveEncounter(
 
   let rng = state.rng;
   let kills = 0;
-  for (let gun = 0; gun < state.guns; gun++) {
+  const firedWeapons = weaponIds(state).slice(0, MAX_GUNS_FIRED);
+  for (const weapon of firedWeapons) {
     const [roll, nextRng] = nextRandom({ ...state, rng });
     rng = nextRng;
-    if (roll < POLICE_GUN_KILL_CHANCE) kills += 1;
+    if (roll < gunKillChance(weapon)) kills += 1;
   }
   kills = Math.min(officers, kills);
   const remaining = officers - kills;
-  const notorietyKills = state.notorietyKills + kills;
-  const heatFloor = Math.min(90, notorietyKills * NOTORIETY_PER_KILL);
+  const identityKills = state.identityKills + kills;
+  const rawExposure = POLICE_SHOOTOUT_EXPOSURE + kills * POLICE_KILL_EXPOSURE;
   const next: GameState = {
     ...state,
+    ...applyRawHeatExposure(state, rawExposure, identityKills),
     rng,
     officersKilled: state.officersKilled + kills,
-    notorietyKills,
-    heatFloor,
-    heat: Math.max(
-      heatFloor,
-      heatAfterExposure(state.heat, {
-        policeShootout: true,
-        policeKilled: kills,
-      }),
-    ),
     pendingEncounter:
       remaining > 0
         ? { ...encounter, officers: remaining, stage: "police-fire" }
@@ -2371,28 +2845,27 @@ function resolvePoliceFire(state: GameState): GameState {
   if (encounter.stage !== "police-fire")
     return invalid(state, "the police are waiting for your move");
   const officers = Math.max(1, encounter.officers ?? 1);
-  const pressure =
-    encounter.effectiveHeat ?? effectiveHeat(state.heat, encounter.destination);
-  const hitChance = clamp(
-    0.18 + officers * 0.055 + pressure * 0.003,
-    0.22,
-    0.9,
-  );
-  const [hitRoll, hitRng] = nextRandom(state);
+  let rng = state.rng;
+  let hitByVolley = false;
+  for (let officer = 0; officer < officers; officer++) {
+    const [roll, nextRng] = nextRandom({ ...state, rng });
+    rng = nextRng;
+    if (roll < POLICE_OFFICER_HIT_CHANCE) hitByVolley = true;
+  }
   const choiceEncounter = { ...encounter, stage: "choice" as const };
-  if (hitRoll >= hitChance)
+  if (!hitByVolley)
     return withOutcome(
-      { ...state, rng: hitRng, pendingEncounter: choiceEncounter },
+      { ...state, rng, pendingEncounter: choiceEncounter },
       "police",
       "They miss.",
       "Bullets go past you.",
       "encounter",
     );
-  const [damageRoll, rng] = nextRandom({ ...state, rng: hitRng });
-  const healthLoss = 10 + Math.floor(damageRoll * 21);
+  const [damageRoll, finalRng] = nextRandom({ ...state, rng });
+  const healthLoss = 10 + Math.floor(damageRoll * 16);
   const hit: GameState = {
     ...state,
-    rng,
+    rng: finalRng,
     health: Math.max(0, state.health - healthLoss),
     pendingEncounter: choiceEncounter,
   };
@@ -2430,26 +2903,16 @@ function resolveLoanSharkEncounter(state: GameState): GameState {
     return invalid(state, "the loan shark's enforcers are not here");
   const [roll, rng] = nextRandom(state);
   const healthLoss = 25 + Math.floor(roll * 51);
-  const cashLost = state.cash;
-  const gunsLost = state.guns;
+  const collection = collectOutstandingDebt({ ...state, rng });
   const next: GameState = {
-    ...state,
-    rng,
-    cash: 0,
-    guns: 0,
-    weapons: [],
-    inventory: emptyInventory(),
-    capacity: COAT_CAPACITIES[0],
+    ...collection.state,
     health: Math.max(0, state.health - healthLoss),
     phase: "market",
     pendingLoanSharkEncounter: undefined,
   };
-  const message =
-    "The loan shark's enforcers f***ed you up and relieved you of your cash and coat. " +
-    `You lost ${cashForLog(cashLost)} and ${gunsLost} ${gunsLost === 1 ? "gun" : "guns"}. ` +
-    `You lost ${healthLoss} health.`;
+  const message = debtCollectionMessage(collection, healthLoss);
   if (next.health <= 0) {
-    const ended = endGame(next, "The loan shark's enforcers beat you.");
+    const ended = endGame(next, "The loan shark's enforcers beat you down.");
     const result = withOutcome(
       ended,
       "loan-shark",
@@ -2465,7 +2928,7 @@ function resolveLoanSharkEncounter(state: GameState): GameState {
             followUp: {
               kind: "loan-shark",
               title: "They wasted you!!!",
-              message: "The beating kills you.",
+              message: "",
               nextPhase: "gameover",
               buttonLabel: "Game over",
             },
@@ -2544,14 +3007,13 @@ function layLow(state: GameState): GameState {
     applyInterest({
       ...state,
       health: clamp(state.health + 22, 0, 100),
-      heat: heatAfterLayingLow(state.heat, state.heatFloor),
     }),
     state.current,
     state.day + 1,
-    "You lay low. The city forgets you a little.",
+    "You lay low for a day.",
     false,
   );
-  return presentNotices(addLog(next, "Health recovered and heat cooled."));
+  return presentNotices(addLog(next, "Health recovered while you lay low."));
 }
 
 export function applyAction(state: GameState, action: Action): GameState {
@@ -2563,13 +3025,30 @@ export function applyAction(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "buy":
       return buy(state, action.product, action.quantity);
+    case "buy-storage":
+      return buyStorage(
+        state,
+        action.borough,
+        action.unit,
+        action.product,
+        action.quantity,
+      );
     case "sell":
       return sell(state, action.product, action.quantity);
+    case "sell-storage":
+      return sellStorage(state, action.borough, action.unit);
     case "store":
-      return transferStorage(state, action.product, action.quantity, "store");
+      return transferStorage(
+        state,
+        action.unit,
+        action.product,
+        action.quantity,
+        "store",
+      );
     case "retrieve":
       return transferStorage(
         state,
+        action.unit,
         action.product,
         action.quantity,
         "retrieve",
@@ -2583,14 +3062,16 @@ export function applyAction(state: GameState, action: Action): GameState {
       return askLoanSharkForMoreTime(state);
     case "buy-gun":
       return buyGun(state, action.gun);
+    case "sell-gun":
+      return sellGun(state, action.gun);
     case "use-local-service":
       return useLocalService(state, action.service);
     case "use-fence":
-      return useFence(state);
+      return useFence(state, action.source);
     case "rent-storage":
       return rentStorage(state);
     case "close-storage":
-      return closeStorage(state);
+      return closeStorage(state, action.unit);
     case "consult-contact":
       return consultContact(state);
     case "travel":
@@ -2616,11 +3097,36 @@ export function inventoryUnits(state: GameState): number {
 export function inventoryValue(state: GameState): number {
   return cargoValue(state);
 }
-export function storedUnits(state: GameState, id?: StorageBoroughId): number {
-  if (id) return totalCargo(state.storageUnits[id].inventory);
+export function storedUnits(
+  state: GameState,
+  id?: StorageBoroughId,
+  slot?: number,
+): number {
+  if (id && slot !== undefined)
+    return storageUnitAt(state, id, slot)?.quantity ?? 0;
+  if (id)
+    return state.storageUnits[id].units.reduce(
+      (total, unit) => total + unit.quantity,
+      0,
+    );
   return STORAGE_BOROUGHS.reduce(
     (total, boroughId) =>
-      total + totalCargo(state.storageUnits[boroughId].inventory),
+      total +
+      state.storageUnits[boroughId].units.reduce(
+        (subtotal, unit) => subtotal + unit.quantity,
+        0,
+      ),
+    0,
+  );
+}
+
+export function rentedStorageUnits(
+  state: GameState,
+  id?: StorageBoroughId,
+): number {
+  if (id) return state.storageUnits[id].units.length;
+  return STORAGE_BOROUGHS.reduce(
+    (total, boroughId) => total + state.storageUnits[boroughId].units.length,
     0,
   );
 }
