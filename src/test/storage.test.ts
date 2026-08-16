@@ -60,15 +60,33 @@ describe("local persistence", () => {
     expect(loadGame()).toBeNull();
   });
 
-  it("invalidates version-one runs while retaining their runner name", () => {
+  it("invalidates version-two runs while retaining their runner name", () => {
     localStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ version: 1, name: "Old Runner" }),
+      JSON.stringify({ version: 2, name: "Old Runner" }),
     );
     expect(loadGame()).toBeNull();
     expect(localStorage.getItem(SAVE_KEY)).toBeNull();
     expect(loadRunnerName()).toBe("Old Runner");
     expect(localStorage.getItem(RUNNER_NAME_KEY)).toBe("Old Runner");
+  });
+
+  it("invalidates the obsolete pooled-storage version-three draft", () => {
+    localStorage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        version: 3,
+        name: "Draft Runner",
+        storageUnits: {
+          brooklyn: { active: true, units: 1, inventory: {} },
+          queens: { active: false, units: 0, inventory: {} },
+          staten: { active: false, units: 0, inventory: {} },
+        },
+      }),
+    );
+    expect(loadGame()).toBeNull();
+    expect(localStorage.getItem(SAVE_KEY)).toBeNull();
+    expect(loadRunnerName()).toBe("Draft Runner");
   });
 
   it("normalizes and retains the runner name independently", () => {

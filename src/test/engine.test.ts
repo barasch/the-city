@@ -9,13 +9,13 @@ import {
   effectiveHeat,
   GameState,
   GUN_CATALOG,
-  heatAfterLayingLow,
+  heatAfterElapsedDay,
+  heatCeiling,
   inventoryUnits,
   loanSharkEncounterChance,
   LOCAL_SERVICES,
   LOAN_DAILY_RATE,
   MAX_GUNS,
-  NOTORIETY_PER_KILL,
   POLICE_GUN_KILL_CHANCE,
   policeEncounterChance,
   policeOfficerRange,
@@ -96,17 +96,18 @@ const chase = (
   },
 });
 
-describe("version-two deterministic engine", () => {
+describe("version-three deterministic engine", () => {
   it("starts a versioned run with the settled opening terms", () => {
     const state = startGame("", "queens", 20260810);
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.name).toBe("Runner");
     expect(state.cash).toBe(5000);
     expect(state.debt).toBe(10000);
     expect(state.loanRate).toBe(LOAN_DAILY_RATE);
-    expect(state.loanGraceUntilDay).toBe(5);
+    expect(state.loanGraceUntilDay).toBe(6);
     expect(state.capacity).toBe(10);
-    expect(state.heatFloor).toBe(0);
+    expect(state.heatExposure).toBe(0);
+    expect(state.identityKills).toBe(0);
     expect(state.officersKilled).toBe(0);
   });
 
@@ -250,8 +251,8 @@ describe("version-two deterministic engine", () => {
       product: "coke",
       quantity: 6,
     });
-    expect(split.heat).toBeGreaterThanOrEqual(30);
-    expect(split.heat).toBeLessThanOrEqual(60);
+    expect(split.heat).toBeGreaterThan(0);
+    expect(split.heat).toBeLessThan(20);
     expect(split.loanPremiumPressure).toBe(true);
 
     const huge = applyAction(base, {
@@ -259,35 +260,40 @@ describe("version-two deterministic engine", () => {
       product: "heroin",
       quantity: 25,
     });
-    expect(huge.heat).toBe(100);
+    expect(huge.heat).toBeGreaterThan(split.heat);
+    expect(huge.heat).toBeLessThanOrEqual(heatCeiling(0));
   });
 
-  it("keeps Lay low above the notoriety floor", () => {
+  it("lets heat decay without a notoriety floor while exposure and kills slow it", () => {
     let heat = 90;
-    for (let day = 0; day < 20; day++) heat = heatAfterLayingLow(heat, 36);
-    expect(heat).toBe(36);
+    const first = heatAfterElapsedDay(heat, 240, 4);
+    expect(first).toBeLessThan(heat);
+    expect(first).toBeGreaterThan(heatAfterElapsedDay(heat, 0, 0));
+    for (let day = 0; day < 100; day++)
+      heat = heatAfterElapsedDay(heat, 240, 4);
+    expect(heat).toBe(0);
   });
 
-  it("uses displayed heat for most boroughs and doubled effective heat in Manhattan", () => {
+  it("uses displayed heat for most boroughs and 1.5x effective heat in Manhattan", () => {
     expect(effectiveHeat(1, "manhattan")).toBe(2);
-    expect(effectiveHeat(10, "manhattan")).toBe(20);
-    expect(effectiveHeat(50, "manhattan")).toBe(100);
+    expect(effectiveHeat(10, "manhattan")).toBe(15);
+    expect(effectiveHeat(50, "manhattan")).toBe(75);
     expect(effectiveHeat(50, "queens")).toBe(50);
   });
 
   it("gates police encounters and patrol size by heat", () => {
-    expect(policeEncounterChance(9, 0.52, 100_000_000)).toBeLessThan(0.01);
+    expect(policeEncounterChance(9, 0.52, 100_000_000)).toBeLessThan(0.012);
     expect(policeEncounterChance(90, 0.3, 0)).toBeGreaterThan(
       policeEncounterChance(50, 0.3, 0),
     );
-    expect(policeOfficerRange(9)).toEqual({ min: 1, max: 2 });
-    expect(policeOfficerRange(15)).toEqual({ min: 1, max: 3 });
-    expect(policeOfficerRange(50)).toEqual({ min: 3, max: 7 });
-    expect(policeOfficerRange(100)).toEqual({ min: 5, max: 12 });
+    expect(policeOfficerRange(9)).toEqual({ min: 1, max: 1 });
+    expect(policeOfficerRange(15)).toEqual({ min: 1, max: 1 });
+    expect(policeOfficerRange(50)).toEqual({ min: 7, max: 8 });
+    expect(policeOfficerRange(100)).toEqual({ min: 15, max: 15 });
   });
 
-  it("makes every gun an independent two-thirds kill roll", () => {
-    expect(POLICE_GUN_KILL_CHANCE).toBeCloseTo(2 / 3);
+  it("fires at most two guns, each with an independent quality-scaled roll", () => {
+    expect(POLICE_GUN_KILL_CHANCE).toBe(0.95);
     const armed = chase(
       {
         ...startGame("Armed", "bronx", 51),
@@ -306,8 +312,10 @@ describe("version-two deterministic engine", () => {
     }
     expect(multi?.officersKilled).toBeGreaterThanOrEqual(2);
     expect(multi?.guns).toBe(MAX_GUNS);
-    expect(multi?.heatFloor).toBe(
-      Math.min(90, (multi?.officersKilled ?? 0) * NOTORIETY_PER_KILL),
+    expect(multi?.identityKills).toBe(multi?.officersKilled);
+    expect(multi?.officersKilled).toBeLessThanOrEqual(2);
+    expect(multi?.heat).toBeLessThanOrEqual(
+      heatCeiling(multi?.identityKills ?? 0),
     );
   });
 
@@ -405,7 +413,7 @@ describe("version-two deterministic engine", () => {
 
   it("turns high-effective-heat Give up into inaction and return fire", () => {
     const hot = chase(
-      { ...startGame("Hot", "manhattan", 56), heat: 20 },
+      { ...startGame("Hot", "manhattan", 56), heat: 25 },
       2,
       "manhattan",
     );
@@ -448,11 +456,14 @@ describe("version-two deterministic engine", () => {
   it("charges grace-sensitive enforcer probabilities before police", () => {
     const initial = startGame("Debtor", "brooklyn", 58);
     expect(loanSharkEncounterChance(initial, "brooklyn")).toBe(0);
-    const exposed = {
+    const safe = {
       ...initial,
       day: 6,
       loanPremiumPressure: false,
     };
+    expect(loanSharkEncounterChance(safe, "queens")).toBe(0);
+    expect(loanSharkEncounterChance(safe, "brooklyn")).toBe(0);
+    const exposed = { ...safe, day: 7 };
     expect(loanSharkEncounterChance(exposed, "queens")).toBe(0.1);
     expect(loanSharkEncounterChance(exposed, "brooklyn")).toBe(0.25);
     expect(
@@ -469,7 +480,7 @@ describe("version-two deterministic engine", () => {
     ).toBe(0.5);
   });
 
-  it("makes a wild enforcer beating take cash, stock, guns, and the coat", () => {
+  it("makes a wild enforcer beating credit cash and spare guns", () => {
     const base = startGame("Marked", "brooklyn", 59);
     const found: GameState = {
       ...base,
@@ -487,12 +498,13 @@ describe("version-two deterministic engine", () => {
     };
     const result = applyAction(found, { type: "resolve-loan-shark" });
     expect(result.cash).toBe(0);
-    expect(result.guns).toBe(0);
+    expect(result.guns).toBe(2);
+    expect(result.debt).toBe(base.debt - 1234);
     expect(inventoryUnits(result)).toBe(0);
     expect(result.capacity).toBe(10);
     expect(result.health).toBeGreaterThanOrEqual(25);
     expect(result.health).toBeLessThanOrEqual(75);
-    expect(result.pendingOutcome?.message).toContain("f***ed you up");
+    expect(result.pendingOutcome?.message).toContain("beat you down");
   });
 
   it("raises only the vig when an indebted player mistakenly asks for more", () => {
@@ -522,10 +534,10 @@ describe("version-two deterministic engine", () => {
     });
     expect(borrowed.cash).toBe(market.cash + REPEAT_LOAN_ADVANCE);
     expect(borrowed.debt).toBe(REPEAT_LOAN_DEBT);
-    expect(borrowed.loanGraceUntilDay).toBe(market.day + 4);
+    expect(borrowed.loanGraceUntilDay).toBe(market.day + 5);
   });
 
-  it("uses a smaller office beating and credits seized cash only during payment", () => {
+  it("uses a smaller office beating and applies the unified cash-credit rule", () => {
     const base = { ...startGame("Office", "brooklyn", 62), cash: 20_000 };
     let detected: GameState | undefined;
     for (let index = 1; index < 1000 && !detected; index++) {
@@ -536,14 +548,14 @@ describe("version-two deterministic engine", () => {
       if (candidate.health < 100) detected = candidate;
     }
     expect(detected).toBeDefined();
-    expect(detected?.cash).toBe(0);
+    expect(detected?.cash).toBe(1000);
     expect(detected?.debt).toBe(0);
     expect(detected?.health).toBeGreaterThanOrEqual(70);
     expect(detected?.health).toBeLessThanOrEqual(90);
 
     const moreTime = applyAction(base, { type: "loan-more-time" });
-    expect(moreTime.cash).toBe(0);
-    expect(moreTime.debt).toBe(base.debt);
+    expect(moreTime.cash).toBe(1000);
+    expect(moreTime.debt).toBe(0);
     expect(base.health - moreTime.health).toBeGreaterThanOrEqual(10);
     expect(base.health - moreTime.health).toBeLessThanOrEqual(30);
   });
@@ -601,18 +613,19 @@ describe("version-two deterministic engine", () => {
     };
     state = applyAction(state, { type: "rent-storage" });
     expect(state.cash).toBe(0);
-    expect(storageUnitAt(state, "brooklyn").active).toBe(true);
+    expect(storageUnitAt(state, "brooklyn", 1)).toBeDefined();
     state = applyAction(state, {
       type: "store",
+      unit: 1,
       product: "green",
       quantity: 10,
     });
     expect(storedUnits(state, "brooklyn")).toBe(10);
     expect(storedUnits(state, "queens")).toBe(0);
     state = clearFlow(applyAction(state, { type: "lay-low" }));
-    expect(storageUnitAt(state, "brooklyn").lateSinceDay).toBe(2);
+    expect(state.storageUnits.brooklyn.lateSinceDay).toBe(2);
     state = clearFlow(applyAction(state, { type: "lay-low" }));
-    expect(storageUnitAt(state, "brooklyn").active).toBe(false);
+    expect(storageUnitAt(state, "brooklyn", 1)).toBeUndefined();
     expect(storedUnits(state, "brooklyn")).toBe(0);
 
     const overfull = {
@@ -627,6 +640,7 @@ describe("version-two deterministic engine", () => {
     const rented = applyAction(overfull, { type: "rent-storage" });
     const refused = applyAction(rented, {
       type: "store",
+      unit: 1,
       product: "green",
       quantity: STORAGE_CAPACITY + 1,
     });
@@ -634,14 +648,14 @@ describe("version-two deterministic engine", () => {
     expect(refused.log[0]).toContain("full");
   });
 
-  it("makes plastic surgery a three-day $200,000 reset of heat and notoriety", () => {
+  it("makes plastic surgery a three-day $200,000 identity-heat reset", () => {
     const initial: GameState = {
       ...startGame("New Face", "manhattan", 65),
       cash: 300_000,
       debt: 0,
       heat: 91,
-      heatFloor: 48,
-      notorietyKills: 4,
+      heatExposure: 180,
+      identityKills: 4,
     };
     const changed = applyAction(initial, {
       type: "use-local-service",
@@ -650,8 +664,8 @@ describe("version-two deterministic engine", () => {
     expect(changed.day).toBe(4);
     expect(changed.cash).toBe(100_000);
     expect(changed.heat).toBe(0);
-    expect(changed.heatFloor).toBe(0);
-    expect(changed.notorietyKills).toBe(0);
+    expect(changed.heatExposure).toBe(0);
+    expect(changed.identityKills).toBe(0);
   });
 
   it("accrues the published bank and debt rates each day", () => {
@@ -680,11 +694,14 @@ describe("version-two deterministic engine", () => {
       storageUnits: {
         ...base.storageUnits,
         brooklyn: {
-          active: true,
-          inventory: {
-            ...base.storageUnits.brooklyn.inventory,
-            heroin: { quantity: 20, avgCost: 1 },
-          },
+          units: [
+            {
+              slot: 1,
+              productId: "heroin",
+              quantity: 20,
+              avgCost: 1,
+            },
+          ],
         },
       },
     };
@@ -753,7 +770,10 @@ describe("version-two deterministic engine", () => {
         expect(state.cash).toBeGreaterThanOrEqual(0);
         expect(state.bank).toBeGreaterThanOrEqual(0);
         expect(state.debt).toBeGreaterThanOrEqual(0);
-        expect(state.heat).toBeGreaterThanOrEqual(state.heatFloor);
+        expect(state.heat).toBeGreaterThanOrEqual(0);
+        expect(state.heat).toBeLessThanOrEqual(
+          heatCeiling(state.identityKills),
+        );
         expect(inventoryUnits(state)).toBeLessThanOrEqual(state.capacity);
       }
       if (state.phase !== "gameover")

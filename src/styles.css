@@ -140,6 +140,10 @@ h3 {
   padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 2rem) 4rem;
 }
 
+.game.shell {
+  width: min(100%, 840px);
+}
+
 .eyebrow {
   margin-bottom: 0.65rem;
   color: var(--yellow);
@@ -543,8 +547,7 @@ h3 {
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: 1rem 1.5rem;
   margin: 0 0 clamp(2rem, 5vw, 3rem);
-  padding-block: 1rem;
-  border-block: 1px solid var(--line-soft);
+  padding-block: 0.6rem;
 }
 
 .stat {
@@ -575,24 +578,12 @@ h3 {
 }
 
 .game-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 0.8fr);
-  gap: clamp(2rem, 5vw, 4.25rem);
-  align-items: start;
-}
-
-.trading-column,
-.action-column {
+  width: 100%;
   min-width: 0;
 }
 
 .panel {
-  margin-bottom: 2.25rem;
-}
-
-.action-column > .panel {
-  padding-top: 1rem;
-  border-top: 1px solid var(--line-soft);
+  margin-bottom: 1.7rem;
 }
 
 .panel-heading {
@@ -683,21 +674,6 @@ td {
   white-space: nowrap;
 }
 
-.market-table {
-  table-layout: fixed;
-}
-
-.market-table th:first-child,
-.market-table td:first-child {
-  width: 68%;
-}
-
-.market-table th:last-child,
-.market-table td:last-child {
-  width: 32%;
-  text-align: right;
-}
-
 .unlisted {
   opacity: 0.4;
 }
@@ -710,21 +686,53 @@ td {
   border-radius: 50%;
 }
 
-.market-product {
-  width: 100%;
-  min-height: 40px;
-  padding: 0.45rem 0.35rem;
-  border: 0;
-  color: var(--white);
-  background: transparent;
-  text-align: left;
+.market-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem 1.2rem;
 }
 
-.market-product:hover:not(:disabled) {
-  border-color: transparent;
-  color: var(--cyan);
-  background: #17486180;
-  transform: none;
+.market-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.42rem 0;
+  font-size: 0.75rem;
+}
+
+.market-price span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--white);
+}
+
+.market-price b {
+  flex: 0 0 auto;
+  color: var(--yellow);
+  font-weight: 500;
+}
+
+.market-actions,
+.city-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.market-actions {
+  margin-top: 1.1rem;
+}
+
+.market-actions button,
+.city-actions > button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.city-actions {
+  margin: -0.35rem 0 1.8rem;
 }
 
 .inventory-panel {
@@ -741,7 +749,7 @@ td {
 .inventory-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  border-top: 1px solid var(--line-soft);
+  gap: 0.25rem 1.2rem;
 }
 
 .inventory-item {
@@ -749,9 +757,7 @@ td {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.2rem 0.75rem;
   min-width: 0;
-  padding: 0.75rem 0.65rem 0.75rem 0;
-  border-right: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
+  padding: 0.45rem 0;
 }
 
 .inventory-item span {
@@ -770,30 +776,75 @@ td {
   font-size: 0.6875rem;
 }
 
-.service-buttons,
-.travel-buttons {
+.inventory-subheading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.45rem;
+}
+
+.inventory-subheading h3 {
+  margin: 0;
+  color: var(--yellow);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inventory-subheading span {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.storage-inventory-subsection {
+  margin-top: 1.1rem;
+}
+
+.storage-inventory-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.45rem 1.2rem;
 }
 
-.service-buttons button,
-.travel-buttons button {
+.storage-inventory-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.18rem 0.75rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+}
+
+.storage-inventory-item span,
+.storage-inventory-item span b,
+.storage-inventory-item span small {
+  display: block;
   min-width: 0;
-  min-height: 48px;
 }
 
-.service-buttons > :last-child:nth-child(odd) {
+.storage-inventory-item span b {
+  overflow-wrap: anywhere;
+  color: var(--white);
+  font-size: 0.75rem;
+}
+
+.storage-inventory-item span small,
+.storage-inventory-item > small {
+  color: var(--muted);
+  font-size: 0.625rem;
+}
+
+.storage-inventory-item strong {
+  color: var(--cyan);
+  font-size: 0.75rem;
+}
+
+.storage-inventory-item > small {
   grid-column: 1 / -1;
-}
-
-.settle-panel {
-  margin-top: 0.25rem;
 }
 
 .settle-button {
   width: 100%;
-  min-height: 62px;
   letter-spacing: 0.04em;
 }
 
@@ -812,15 +863,13 @@ td {
   max-height: 24rem;
   overflow-y: auto;
   margin: 0 0 1rem;
-  padding: 0 0.75rem;
-  border-block: 1px solid var(--line-soft);
+  padding: 0;
   scrollbar-color: var(--line) transparent;
 }
 
 .field-note-list p {
   margin: 0;
   padding: 0.65rem 0;
-  border-bottom: 1px solid var(--line-soft);
   color: #d8edf2;
   font-size: 0.71875rem;
   line-height: 1.55;
@@ -836,8 +885,7 @@ td {
 
 .ledger-details {
   margin: 0 0 1rem;
-  padding: 0.75rem 0;
-  border-block: 1px solid var(--line-soft);
+  padding: 0.5rem 0;
 }
 
 .ledger-details summary {
@@ -970,7 +1018,6 @@ td {
 
 .instructions-grid article {
   padding: 0.9rem 0;
-  border-top: 1px solid var(--line);
 }
 
 .instructions-grid h3 {
@@ -991,7 +1038,6 @@ td {
   gap: 0.75rem;
   margin-bottom: 1.15rem;
   padding-block: 0.8rem;
-  border-block: 1px solid var(--line-soft);
 }
 
 .dialog-facts span {
@@ -1032,6 +1078,52 @@ td {
   line-height: 1.55;
 }
 
+.dialog-subheading {
+  margin: 1rem 0 0.55rem;
+  color: var(--white);
+  font-size: 0.8125rem;
+}
+
+.dialog-select {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.9rem 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.fulfillment-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.75rem 0;
+}
+
+.fulfillment-toggle button {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.fulfillment-toggle button.selected {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: #173f51;
+}
+
+.fulfillment-toggle small {
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 400;
+}
+
+.storage-liquidation-note {
+  margin: 0.8rem 0;
+  color: var(--yellow);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
 .inline-error {
   margin: 0.8rem 0;
   color: var(--pink);
@@ -1067,6 +1159,59 @@ td {
   width: 100%;
 }
 
+.local-choice-list button span,
+.sell-source-list button span,
+.sell-source-list button small,
+.local-choice-list button small {
+  display: block;
+}
+
+.local-choice-list button small,
+.sell-source-list button small {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+.sell-source-list button {
+  text-align: left;
+}
+
+.trade-product-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.trade-product-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.trade-product-list button span,
+.trade-product-list button small {
+  display: block;
+  min-width: 0;
+}
+
+.trade-product-list button small {
+  margin: 0.18rem 0 0 1.1rem;
+  color: var(--muted);
+  font-size: 0.625rem;
+}
+
+.trade-product-list button b {
+  flex: 0 0 auto;
+  color: var(--yellow);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
 .loan-choices button span,
 .loan-choices button small {
   display: block;
@@ -1084,8 +1229,7 @@ td {
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: 0.45rem 1rem;
   margin: -0.25rem 0 1.1rem;
-  padding-bottom: 0.85rem;
-  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 0.3rem;
   color: var(--muted);
   font-size: 0.6875rem;
   line-height: 1.45;
@@ -1093,7 +1237,6 @@ td {
 
 .gun-catalog {
   display: grid;
-  border-top: 1px solid var(--line-soft);
 }
 
 .gun-option {
@@ -1102,7 +1245,6 @@ td {
   gap: 1rem;
   align-items: center;
   padding: 0.65rem 0;
-  border-bottom: 1px solid var(--line-soft);
 }
 
 .gun-option span,
@@ -1147,6 +1289,40 @@ td {
 
 .storage-product-list b {
   color: var(--yellow);
+}
+
+.storage-unit-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.55rem;
+  margin: 1rem 0;
+}
+
+.storage-unit-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.storage-unit-list span,
+.storage-unit-list b,
+.storage-unit-list small {
+  display: block;
+}
+
+.storage-unit-list small {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.625rem;
+}
+
+.storage-unit-list strong {
+  flex: 0 0 auto;
+  color: var(--yellow);
+  font-size: 0.6875rem;
 }
 
 .destination-list {
@@ -1235,7 +1411,6 @@ td {
 .final-grid {
   margin: 0 0 1.5rem;
   padding: 1rem;
-  border-block: 1px solid var(--line-soft);
 }
 
 .final-grid .stat {
@@ -1248,16 +1423,6 @@ td {
 }
 
 @media (max-width: 900px) {
-  .game-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-
-  .action-column > .panel {
-    padding-top: 0;
-    border-top: 0;
-  }
-
   .panel {
     margin-bottom: 2rem;
   }
@@ -1310,6 +1475,10 @@ td {
 
   .instructions-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .market-price-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .modal-backdrop,
@@ -1365,12 +1534,12 @@ td {
     gap: 0.75rem;
   }
 
-  .service-buttons,
-  .travel-buttons {
-    gap: 0.55rem;
+  .trade-product-list,
+  .storage-product-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .storage-product-list {
+  .fulfillment-toggle {
     grid-template-columns: minmax(0, 1fr);
   }
 
